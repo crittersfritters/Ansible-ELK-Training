@@ -53,7 +53,10 @@ PY
     fi
   done < <(
     find "$PROJECT_ROOT" \
-      -path "$PROJECT_ROOT/.git" -prune -o \
+      -type d \( \
+        -name '.git' -o -name '.ansible' -o \
+        -name '.cache' -o -name '.venv' \
+      \) -prune -o \
       -path "$PROJECT_ROOT/validation" -prune -o \
       -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z
   )
@@ -155,7 +158,10 @@ check_concrete_compose_files() {
     fi
   done < <(
     find "$PROJECT_ROOT" \
-      -path "$PROJECT_ROOT/.git" -prune -o \
+      -type d \( \
+        -name '.git' -o -name '.ansible' -o \
+        -name '.cache' -o -name '.venv' \
+      \) -prune -o \
       -path "$PROJECT_ROOT/validation" -prune -o \
       -type f \( \
         -name 'compose.yml' -o -name 'compose.yaml' -o \
@@ -336,6 +342,7 @@ check_documentation_integrity() {
 
   local output
   if output=$(python3 - "$PROJECT_ROOT" <<'PY'
+import os
 import pathlib
 import re
 import sys
@@ -344,9 +351,19 @@ import urllib.parse
 root = pathlib.Path(sys.argv[1]).resolve()
 problems = []
 link_pattern = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
-for document in sorted(root.rglob("*.md")):
-    if ".git" in document.parts:
-        continue
+excluded_directories = {".git", ".ansible", ".cache", ".venv"}
+documents = []
+for directory, directory_names, file_names in os.walk(root):
+    directory_names[:] = sorted(
+        name for name in directory_names if name not in excluded_directories
+    )
+    documents.extend(
+        pathlib.Path(directory, name)
+        for name in sorted(file_names)
+        if name.endswith(".md")
+    )
+
+for document in sorted(documents):
     text = document.read_text(encoding="utf-8")
     for raw in link_pattern.findall(text):
         target = raw.strip().split(maxsplit=1)[0].strip("<>")
