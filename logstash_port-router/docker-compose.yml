@@ -1,23 +1,23 @@
 services:
-  logstash_pipeline:
+  logstash_port-router:
     image: docker.elastic.co/logstash/logstash:9.2.8
-    container_name: logstash_pipeline
+    container_name: logstash_port-router
     network_mode: host
     restart: unless-stopped
     extra_hosts:
-      - "elasticsearch.local:127.0.0.1"
       - "kafka.local:127.0.0.1"
+    environment:
+      MISSION_EVENT_TIMEZONE: "${MISSION_EVENT_TIMEZONE:-UTC}"
     volumes:
       - "./pipeline:/usr/share/logstash/pipeline:ro,Z"
       - "./config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z"
       - "./config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro,Z"
     healthcheck:
       test:
-        - CMD-SHELL
-        - >-
-          curl -fsS http://127.0.0.1:9600/_node/pipelines/zeek >/dev/null
-          && curl -fsS http://127.0.0.1:9600/_node/pipelines/suricata >/dev/null
-          && curl -fsS http://127.0.0.1:9600/_node/pipelines/grok_pipeline >/dev/null
+        - CMD
+        - curl
+        - -fsS
+        - http://127.0.0.1:9601/_node/pipelines/logstash_port-router
       interval: 10s
       timeout: 10s
       retries: 24
