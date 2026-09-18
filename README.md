@@ -100,12 +100,12 @@ why your chosen implementation satisfies the requirement.
 - [Course map](docs/course-map.md) — milestone sequence and expected evidence
 - [Working contract](docs/working-contract.md) — decisions that must remain
   consistent across components
-- [Milestones](docs/milestones/) — GitLab bootstrap followed by the manual
-  Elasticsearch, sensor, direct-path, Kafka, Grok, and proof stages
+- [Milestones](docs/milestones/) — GitLab bootstrap, manual stack, Ansible,
+  Vault, and learner-authored CI stages
 - [GitLab bootstrap](docs/gitlab-bootstrap.md) — the explicit path from a new
   host through a repository cloned from the local GitLab instance
 
-Later commits add the Ansible, Vault, and CI milestones, followed by the
-sanitized fixtures. Begin with
+The final curriculum commit adds the sanitized inputs and expected outcomes.
+Begin with
 [Host and GitLab bootstrap](docs/milestones/00-host-and-gitlab.md); later work
 intentionally remains outcome-based.
