@@ -17,9 +17,9 @@ docker logs -f mini-manticore-gitlab
 
 GitLab is ready at `http://gitlab.local:8929` after its application health
 checks settle. Retrieve the one-time initial administrator password from the
-container without copying it into the repository and replace it immediately.
-The account, runner, and SSH setup guidance is introduced in a later answer
-checkpoint.
+container without copying it into the repository, replace it immediately, and
+follow [the identity and Vault guide](../../docs/identity-and-vault.md) for
+runner and SSH setup.
 
 On a headless host, forward workstation port 8929 to host loopback over SSH,
 map `gitlab.local` to `127.0.0.1` on the workstation, and browse the canonical
