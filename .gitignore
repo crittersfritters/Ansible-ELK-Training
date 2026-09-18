@@ -1,0 +1,5 @@
+/elasticsearch/data/
+/kafka/data/
+/filebeat_zeek/data/
+/filebeat_suricata/data/
+/kibana/data/
