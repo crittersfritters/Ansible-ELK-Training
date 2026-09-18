@@ -1,16 +1,41 @@
-# Manual checkpoint: native sensors and fixtures
+# Manual checkpoint: direct sensor path
 
-This checkpoint retains the manual Elasticsearch and Kibana foundation and adds the host-native data sources that later Filebeat projects will collect.
+This checkpoint proves the two sensor paths before Kafka is introduced. It is
+preserved in answer-sheet history so the later queue transition is visible as
+a real architectural change.
 
-Install and configure Zeek and Suricata using [the native sensor setup reference](docs/sensor-host-setup.md). Zeek must write newline-delimited JSON beneath `/opt/zeek/logs/current`; Suricata must write EVE JSON to `/var/log/suricata/eve.json`.
+Prerequisites are native Zeek JSON logs under `/opt/zeek/logs/current`,
+Suricata EVE JSON at `/var/log/suricata/eve.json`, the localhost aliases from
+the reference contract, Docker Compose, `curl`, and
+`vm.max_map_count=1048576`.
 
-Before adding a collector, generate fresh traffic and prove each boundary directly:
+Create four persistent state directories for the five Compose projects, start
+Elasticsearch, apply its assets, start Kibana, and wait for it before creating
+the data views. Then start processing Logstash before the two collectors:
 
 ```bash
-sudo test -d /opt/zeek/logs/current
-sudo find /opt/zeek/logs/current -maxdepth 1 -type f -name '*.log' -size +0c
-sudo test -s /var/log/suricata/eve.json
-sudo tail -n 1 /var/log/suricata/eve.json
+mkdir -p elasticsearch/data kibana/data filebeat_zeek/data filebeat_suricata/data
+sudo chown -R 1000:0 elasticsearch/data kibana/data
+sudo chmod 0770 elasticsearch/data kibana/data
+
+docker compose -f elasticsearch/docker-compose.yml up -d --wait
+bash elasticsearch/setup-assets.sh
+docker compose -f kibana/docker-compose.yml up -d
+until curl -fsS 'http://kibana.local:5601/api/status' | \
+  grep -q '"level":"available"'; do sleep 5; done
+bash kibana/setup-data-views.sh
+docker compose -f logstash_pipeline/docker-compose.yml up -d --wait
+docker compose -f filebeat_zeek/docker-compose.yml up -d --wait
+docker compose -f filebeat_suricata/docker-compose.yml up -d --wait
 ```
 
-The sanitized records under `samples/` are deterministic parser and mapping inputs; they do not replace evidence from the running sensors. At this state, no Filebeat or Logstash project exists yet. The next checkpoint connects both sensor paths directly so each collector can be understood before Kafka is inserted.
+The direct boundaries are:
+
+```text
+Zeek JSON -> Zeek Filebeat -> Beats/5044 -> Logstash zeek -> active-zeek
+Suricata EVE -> Suricata Filebeat -> Beats/5045 -> Logstash suricata -> active-suricata
+```
+
+Generate a fresh event for each sensor, identify it in its source file, and
+trace it into its Elasticsearch alias and Kibana data view. Record Filebeat's
+registry behavior before moving to the Kafka checkpoint.
