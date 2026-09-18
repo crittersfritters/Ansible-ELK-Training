@@ -95,15 +95,17 @@ Do not copy implementation files from the answer branch into the training
 branch. When you consult a reference, return to your own design and explain
 why your chosen implementation satisfies the requirement.
 
-## Files at this checkpoint
+## Course files at this checkpoint
 
+- [Course map](docs/course-map.md) — milestone sequence and expected evidence
 - [Working contract](docs/working-contract.md) — decisions that must remain
   consistent across components
-- [Host and GitLab milestone](docs/milestones/00-host-and-gitlab.md) — the
-  first required outcome and its evidence
+- [Milestones](docs/milestones/) — GitLab bootstrap followed by the manual
+  Elasticsearch, sensor, direct-path, Kafka, Grok, and proof stages
 - [GitLab bootstrap](docs/gitlab-bootstrap.md) — the explicit path from a new
   host through a repository cloned from the local GitLab instance
 
-Later curriculum commits add the course map, stack-building milestones, and
-sanitized fixtures. Begin with the host and GitLab milestone; later work
-intentionally returns to outcome-based guidance.
+Later commits add the Ansible, Vault, and CI milestones, followed by the
+sanitized fixtures. Begin with
+[Host and GitLab bootstrap](docs/milestones/00-host-and-gitlab.md); later work
+intentionally remains outcome-based.
