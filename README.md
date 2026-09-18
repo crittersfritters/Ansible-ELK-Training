@@ -95,17 +95,17 @@ Do not copy implementation files from the answer branch into the training
 branch. When you consult a reference, return to your own design and explain
 why your chosen implementation satisfies the requirement.
 
-## Course files at this checkpoint
+## Course files
 
 - [Course map](docs/course-map.md) — milestone sequence and expected evidence
 - [Working contract](docs/working-contract.md) — decisions that must remain
   consistent across components
-- [Milestones](docs/milestones/) — GitLab bootstrap, manual stack, Ansible,
-  Vault, and learner-authored CI stages
-- [GitLab bootstrap](docs/gitlab-bootstrap.md) — the explicit path from a new
-  host through a repository cloned from the local GitLab instance
+- [Milestones](docs/milestones/) — goals, requirements, completion criteria,
+  and research prompts
+- [Sample manifest](samples/MANIFEST.md) — input and expected-outcome fixtures
+  that the maintainer will publish with the course
 
-The final curriculum commit adds the sanitized inputs and expected outcomes.
-Begin with
-[Host and GitLab bootstrap](docs/milestones/00-host-and-gitlab.md); later work
-intentionally remains outcome-based.
+Begin with [Host and GitLab bootstrap](docs/milestones/00-host-and-gitlab.md).
+The detailed path from a new host through the local clone is in
+[GitLab bootstrap](docs/gitlab-bootstrap.md); later milestones intentionally
+return to outcome-based guidance.
