@@ -21,5 +21,6 @@ processors:
       fields:
         name: mission-system-002
 
-output.logstash:
-  hosts: ["logstash-pipeline.local:5045"]
+output.kafka:
+  hosts: ["kafka.local:9092"]
+  topic: suricata-group

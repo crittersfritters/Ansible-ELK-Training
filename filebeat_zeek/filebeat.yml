@@ -22,5 +22,6 @@ processors:
       fields:
         name: mission-system-001
 
-output.logstash:
-  hosts: ["logstash-pipeline.local:5044"]
+output.kafka:
+  hosts: ["kafka.local:9092"]
+  topic: zeek-group

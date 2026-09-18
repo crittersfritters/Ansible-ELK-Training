@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "elasticsearch.local:127.0.0.1"
+      - "kafka.local:127.0.0.1"
     volumes:
       - "./pipeline:/usr/share/logstash/pipeline:ro,Z"
       - "./config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z"
