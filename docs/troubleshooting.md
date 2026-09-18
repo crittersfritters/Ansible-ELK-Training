@@ -1,0 +1,109 @@
+# Troubleshooting by boundary
+
+Start at the last boundary known to work. A running container proves only that
+its process has not exited; it does not prove name resolution, readiness,
+topics, parsing, indexing, aliases, or data views.
+
+| Symptom | Investigate first |
+|---|---|
+| Ansible host unreachable | `/etc/hosts`, host SSH, account key, file modes, `known_hosts` |
+| SSH succeeds; become fails | `ansible` privilege policy and Vault value |
+| Manual play works; CI fails | runner tag/protection, service-account PATH/home/key, protected variable |
+| Elasticsearch exits early | `vm.max_map_count`, data ownership, container logs |
+| Kafka client connects then fails | advertised listener and container alias resolution |
+| Topic is empty | Filebeat source path, registry, JSON decoding, output, topic spelling |
+| Topic has data; index does not | processing pipeline health, consumer group, timestamp conversion, output alias |
+| Mission record is unparsed | exact source line, parser order, anchors, Grok tags, Date failure |
+| Index has data; Kibana does not | data-view title, time field, time range, source timestamp |
+| Changed configuration has no effect | owning role, rendered file, container recreation/restart |
+
+## SSH and Ansible
+
+```bash
+getent ahostsv4 mini-manticore.local
+ssh -vv ansible@mini-manticore.local true
+ansible-inventory --host mini-manticore.local
+ansible mini_manticore_hosts -m ping -vv
+```
+
+Do not fix a host-key error with `host_key_checking=False`. Verify the current
+host fingerprint, then deliberately repair the initiating account's
+`known_hosts` entry if the key legitimately changed.
+
+## Rendered projects and containers
+
+```bash
+for project in \
+  elasticsearch kibana kafka logstash_pipeline logstash_port-router \
+  filebeat_zeek filebeat_suricata; do
+  sudo docker compose -f "/var/docker/$project/docker-compose.yml" config --quiet
+done
+
+sudo docker ps -a --format 'table {{.Names}}\t{{.Status}}'
+```
+
+Use the exact owning logs next:
+
+```bash
+sudo docker logs --tail 200 elasticsearch
+sudo docker logs --tail 200 kafka
+sudo docker logs --tail 200 logstash_pipeline
+sudo docker logs --tail 200 logstash_port-router
+sudo docker logs --tail 200 filebeat_zeek
+sudo docker logs --tail 200 filebeat_suricata
+```
+
+## Kafka boundary
+
+```bash
+sudo docker exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server 127.0.0.1:9092 --list
+sudo docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server 127.0.0.1:9092 --all-groups --describe
+```
+
+Test `getent hosts kafka.local` inside a consuming container. Host-networking
+does not copy the host's hosts file into the container. A successful bootstrap
+connection followed by failures often means the broker advertised a name the
+client cannot resolve.
+
+## Logstash and Filebeat configuration
+
+Use the validation harness to run native checks without sharing the active
+Logstash `path.data`:
+
+```bash
+bash validation/validate.sh runtime --config-tests
+```
+
+For Zeek, inspect a source line and confirm it is valid JSON. If Filebeat is
+healthy but no small fixture is ingested, inspect the filestream fingerprint
+configuration and registry state. The reference uses a 64-byte fingerprint so
+small training records are eligible.
+
+## Elasticsearch and Kibana
+
+```bash
+curl -fsS 'http://127.0.0.1:9200/_cluster/health?pretty'
+curl -fsS 'http://127.0.0.1:9200/_cat/indices?v'
+curl -fsS 'http://127.0.0.1:9200/_cat/aliases?v'
+curl -fsS 'http://127.0.0.1:9200/_index_template/mini-manticore-*?pretty'
+curl -fsS 'http://127.0.0.1:5601/api/status'
+```
+
+Templates affect index creation; correcting a template does not rewrite an
+existing backing index's mappings. Compare the live mapping with the template
+before resetting data. Kibana searches by the document's `@timestamp`; widen
+the time range for the supplied historical fixtures.
+
+## Mission record tracing
+
+Send exactly one source line, then search its preserved `event.original` in the
+declared alias. Check `_parser.id`, `_parser.version`, `event.created`, and
+`@timestamp`. A date-failure fixture should be structurally attributed to its
+parser but written to `active-unparsed`; that is different from a total Grok
+nonmatch.
+
+If the document reaches Kafka but the consumer attempts an invalid index name,
+inspect the `target_index` Kafka record header and consumer event metadata.
+Routing metadata does not appear in the JSON document by design.
