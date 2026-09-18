@@ -1,0 +1,27 @@
+---
+# One physical training host deliberately occupies every service group. Ansible
+# still connects over SSH as the ansible account so the controller, inventory,
+# privilege-escalation, and CI mechanics resemble the deployed environment.
+all:
+  children:
+    mini_manticore_hosts:
+      hosts:
+        mini-manticore.local:
+    web_servers:
+      hosts:
+        mini-manticore.local:
+    queue_nodes:
+      hosts:
+        mini-manticore.local:
+    elasticsearch_nodes:
+      hosts:
+        mini-manticore.local:
+    network_sensors:
+      hosts:
+        mini-manticore.local:
+    logstash_nodes:
+      hosts:
+        mini-manticore.local:
+    port_router_nodes:
+      hosts:
+        mini-manticore.local:
