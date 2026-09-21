@@ -3,8 +3,8 @@
 ## Why this milestone is more explicit
 
 GitLab is the entry point for the rest of the course. You cannot use a local
-GitLab project or its CI/CD runner until the service exists, so this milestone
-provides a firmer contract than later Mini-Manticore exercises.
+GitLab project until the service exists, so this milestone provides a firmer
+contract than later Mini-Manticore exercises.
 
 You will still write the Compose file yourself. This document identifies the
 required pieces and the result to prove; it does not provide completed YAML.
@@ -13,63 +13,49 @@ GitLab is bootstrap infrastructure. Keep its Compose project, configuration,
 and persistent state separate from the seven Mini-Manticore Compose projects.
 Later Ansible work must not manage or remove this project.
 
-## Starting point and supported baseline
+## Starting point and required capabilities
 
 Obtain the `training` branch from the maintainer's Git account by cloning it or
 copying the branch archive. At this point, the authoritative copy is upstream;
 your local GitLab does not exist yet.
 
-The supported path begins on Ubuntu 24.04 LTS. From an administrative learner
-account, update the host and install the bootstrap tools:
+Use a maintained Linux host that can provide the following capabilities:
+
+- Git;
+- Docker Engine with the Docker Compose v2 plugin;
+- an SSH client and host SSH service;
+- Python 3 with YAML and HTTP client libraries;
+- Ansible Core and `ansible-galaxy`; and
+- ordinary network, process, storage, and text-inspection tools.
+
+Install them using current documentation for the selected host and each
+upstream project. The course intentionally does not translate package names,
+repositories, service units, or upgrade commands for a particular
+distribution. Those are host-administration decisions, not Mini-Manticore
+contracts.
+
+Verify the resulting capabilities rather than assuming that installation
+completed correctly:
 
 ```bash
-sudo apt update
-sudo apt full-upgrade
-sudo apt install -y ca-certificates curl git openssh-client openssh-server \
-  python3 python3-yaml python3-requests ansible-core
-sudo systemctl enable --now ssh
-```
-
-Install Docker Engine and the Compose plugin from Docker's official Ubuntu
-repository rather than relying on a similarly named distribution package:
-
-```bash
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Architectures: $(dpkg --print-architecture)
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin
-sudo systemctl enable --now docker
-```
-
-Verify both commands:
-
-```bash
-sudo docker run --rm hello-world
-sudo docker compose version
-```
-
-Verify the host-wide Ansible installation. A system path is intentional: the
-later shell runner must execute the same tools without inheriting a learner's
-interactive shell configuration.
-
-```bash
+git --version
+docker version
+docker compose version
+docker run --rm hello-world
+ssh -V
+python3 --version
 ansible-playbook --version
 ansible-galaxy --version
 python3 -c 'import yaml, requests; print(yaml.__version__, requests.__version__)'
 ```
+
+Use the host's intended administrative model if Docker requires privilege
+escalation. Membership in Docker's control group is root-equivalent; grant it
+deliberately rather than treating it as an ordinary convenience group.
+
+A host-wide Ansible installation is intentional. The later shell runner must
+execute the same tools without inheriting the learner's interactive shell
+configuration.
 
 Install Zeek and Suricata later in Milestone 02, not as hidden containers
 during this bootstrap.
@@ -83,9 +69,8 @@ Before proceeding, the host must have these capabilities:
 - enough available CPU, memory, and disk for GitLab plus the later training
   stack.
 
-If you use another distribution, translate these commands and retain the same
-checks. Do not continue until an ordinary test container and a small test
-Compose project both run successfully.
+Do not continue until an ordinary test container and a small test Compose
+project both run successfully.
 
 ## Reserve non-conflicting endpoints
 
@@ -144,8 +129,8 @@ The three persistent locations have different purposes:
 - application data contains repositories and database state.
 
 Use paths or named volumes that are unambiguous and will not be swept up by a
-Mini-Manticore reset. Account for any host access-control or mandatory-access-
-control requirements on your distribution.
+Mini-Manticore reset. Account for the host's file permissions and any active
+mandatory-access-control mechanism.
 
 ## Start and initialize GitLab
 
@@ -188,71 +173,16 @@ Prove both a fetch and a push from the host. If using SSH, confirm that the
 clone URL includes the nonstandard Git SSH port. If using HTTP, confirm that it
 includes the configured web port.
 
-## Create a host shell runner
+Clone the project back from local GitLab into a separate course working
+directory. Confirm that the clone checks out `training` by default and retains
+the supplied history. Use this local-GitLab clone for the remaining milestones.
 
-The GitLab application is containerized, but the CI/CD runner belongs on the
-Linux host. This separation lets later jobs use host-installed Ansible and SSH
-to reach the dedicated `ansible` account.
+## Defer the runner until the CI milestone
 
-Install GitLab Runner in the manner appropriate for the distribution. The
-supported package creates and manages the dedicated `gitlab-runner` service
-account; verify that it has its own home directory and that the service really
-runs as that identity. Then register it against the local GitLab instance.
-
-On the supported Ubuntu host, install the runner from GitLab's package
-repository after inspecting its repository-setup script:
-
-```bash
-curl -L \
-  https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh \
-  -o /tmp/gitlab-runner-repository.sh
-less /tmp/gitlab-runner-repository.sh
-sudo bash /tmp/gitlab-runner-repository.sh
-sudo apt install -y gitlab-runner
-sudo systemctl enable --now gitlab-runner
-
-sudo -u gitlab-runner -H ansible-playbook --version
-sudo -u gitlab-runner -H ansible-galaxy --version
-sudo -u gitlab-runner -H python3 -c \
-  'import yaml, requests; print(yaml.__version__, requests.__version__)'
-```
-
-Use the runner registration command shown by the local GitLab UI. Supply
-`http://gitlab.local:8929`, choose the `shell` executor, and use the tag
-`mini-manticore-local`. Do not paste the authentication token into a tracked
-file or terminal transcript.
-
-The runner must use the `shell` executor. A Docker executor would move job
-commands into another container and change the SSH, file, and dependency model
-used by this course.
-
-When registering the runner:
-
-- choose project, group, or instance scope deliberately;
-- use the current runner authentication-token workflow exposed by your GitLab
-  version;
-- apply a runner tag only if the jobs will request the same tag;
-- decide explicitly whether untagged jobs are accepted; and
-- do not store the runner token in the repository.
-
-Do not grant the `gitlab-runner` account unrestricted passwordless `sudo` merely
-to make a test pipeline pass. Later deployment jobs should connect through the
-separate `ansible` account, where privilege escalation and its credentials are
-managed as part of the Ansible and Vault milestones.
-
-## Prove the runner independently
-
-Before introducing Ansible, create the smallest useful CI configuration that
-proves the shell runner works. The job should make its execution context
-observable without printing secrets. It should let you establish:
-
-- which host and user execute the script;
-- what the working directory is;
-- whether the expected runner tag is selected; and
-- whether a pushed commit creates and completes a pipeline.
-
-Remove temporary diagnostic output that exposes more host detail than the
-course needs.
+A runner is not required to create GitLab, transfer the repository, or build
+the manual stack. Install, register, and prove the host shell runner in
+Milestone 10, after the manual deployment, Ansible conversion, and Vault
+progression are understood.
 
 ## Completion criteria
 
@@ -266,8 +196,7 @@ This milestone is complete only when all of the following are true:
   recreation;
 - the **Mini-Manticore Training** project preserves the imported history;
 - the learner can fetch and push through the chosen Git transport;
-- a host-installed shell runner appears online in GitLab;
-- a pushed test job runs as `gitlab-runner` and completes successfully; and
+- a fresh clone from local GitLab checks out `training` and retains history;
 - stopping or recreating GitLab does not stop or delete an unrelated test
   Compose project.
 
@@ -280,15 +209,9 @@ behavior.
 - Why must GitLab's advertised external URL agree with its published port?
 - Why is the container's SSH port mapped away from host port `22`?
 - What state is lost if only GitLab's configuration directory is persistent?
-- How does a shell executor differ from a Docker executor?
-- Which permissions does a deployment runner actually need, and which broad
-  permissions merely hide an incomplete design?
-- How will the later GitLab job authenticate to the `ansible` account without
-  placing a private key or password in the repository?
+- Which Git operations prove that the repository was transferred intact?
 
 ## Vendor references
 
-- [Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+- [Docker Engine installation](https://docs.docker.com/engine/install/)
 - [GitLab in a Docker container](https://docs.gitlab.com/install/docker/installation/)
-- [GitLab Runner Linux packages](https://docs.gitlab.com/runner/install/linux-repository/)
-- [Registering a runner](https://docs.gitlab.com/runner/register/)

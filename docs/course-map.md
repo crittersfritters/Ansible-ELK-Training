@@ -6,7 +6,7 @@ checkpoint works and has been committed.
 
 | Milestone | Build outcome | Evidence to retain |
 |---|---|---|
-| 00 | Prepared host and local GitLab | Host checks, GitLab persistence, runner test, successful local clone |
+| 00 | Prepared host and local GitLab | Host checks, GitLab persistence, successful local clone |
 | 01 | Elasticsearch and Kibana | Persistent test document and explanation of Elastic objects |
 | 02 | Zeek and Suricata sources | Fresh records from both sensors and verified read permissions |
 | 03 | Direct collection path | One Zeek and one Suricata event traced without Kafka |
@@ -15,8 +15,8 @@ checkpoint works and has been committed.
 | 06 | Complete manual stack | Seven Compose projects operate together and survive ordinary recreation |
 | 07 | First Ansible role | Elasticsearch can be rebuilt and a second run is idempotent |
 | 08 | Full Ansible conversion | Ansible reconstructs all seven projects without touching GitLab |
-| 09 | Vault progression | The working credential flow is encrypted and usable manually and from CI |
-| 10 | Learner-authored pipeline | A push changes the running stack through GitLab and Ansible |
+| 09 | Vault progression | The working credential flow is encrypted, verified manually, and prepared for CI |
+| 10 | Learner-authored pipeline | Runner evidence and a push that changes the stack through GitLab and Ansible |
 
 ## Suggested learner checkpoints
 

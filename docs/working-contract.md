@@ -90,7 +90,7 @@ source time, or invalid source time belongs at `active-unparsed`.
 The reference candidate uses GitLab CE `19.3.2-ce.0`, Elastic Stack `9.2.8`,
 Apache Kafka `3.9.2`, and Kafka UI `v0.7.2`. Do not substitute mutable
 `latest` tags. The release remains a candidate until the maintainer records a
-full runtime validation on the supported host.
+full runtime validation and the host platform used to produce that evidence.
 
 ## Required topology
 

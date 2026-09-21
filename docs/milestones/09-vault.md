@@ -3,7 +3,7 @@
 ## Goal
 
 Begin with an understood plaintext credential flow, then encrypt it with
-Ansible Vault and make the same encrypted input usable manually and from CI.
+Ansible Vault, prove it manually, and prepare its contract for later CI use.
 
 ## Behavioral requirements
 
@@ -13,8 +13,8 @@ Ansible Vault and make the same encrypted input usable manually and from CI.
 - The learner encrypts the working data only after proving the ordinary
   Ansible variable flow.
 - The encrypted file may be committed; its password may not.
-- GitLab supplies the password through an appropriately protected CI variable
-  and a narrow password-client mechanism.
+- A narrow password-client mechanism is ready to receive the later protected
+  GitLab CI variable without embedding the password.
 
 ## Completion criteria
 
@@ -23,7 +23,8 @@ Ansible Vault and make the same encrypted input usable manually and from CI.
 - The encrypted content can be inspected and used with the correct password.
 - An incorrect password fails without silently falling back to another value.
 - Manual Ansible runs use the encrypted data.
-- The runner can use the same encrypted data without printing the password.
+- The password-client contract can consume an environment-provided value
+  without printing it.
 - You can identify which parts are encryption at rest and which connections
   remain plaintext because of the lab boundary.
 
@@ -31,7 +32,8 @@ Ansible Vault and make the same encrypted input usable manually and from CI.
 
 - Why prove the variable flow before adding encryption?
 - What does Ansible Vault protect, and what does it not protect?
-- How can a shell runner obtain a password without committing or echoing it?
+- How can the later shell runner obtain a password without committing or
+  echoing it?
 - What is the practical effect of GitLab's masked and protected variable
   settings?
 - How would a leaked credential be replaced without rewriting unrelated code?

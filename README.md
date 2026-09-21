@@ -32,8 +32,9 @@ environment. Designing advanced GitLab CI is not a course objective.
 ## Lab boundaries
 
 - Run the entire lab on one Linux host.
-- Use a normal learner account, the `gitlab-runner` account created during
-  bootstrap, and a separate `ansible` account introduced at Milestone 07.
+- Use a normal learner account, a separate `ansible` account introduced at
+  Milestone 07, and the `gitlab-runner` account introduced with CI at
+  Milestone 10.
 - Have Ansible reach the host through SSH as the `ansible` account, even though
   the target resolves to localhost.
 - Treat GitLab as a separate bootstrap Compose project. Mini-Manticore
@@ -68,16 +69,17 @@ and explain the requested evidence.
 
 ## Starting from a new Linux installation
 
-The supported course baseline is a fresh Ubuntu 24.04 LTS host with at least 4
-CPU cores, 16 GiB RAM, and 80 GiB free disk. More memory is useful when GitLab
-and the full stack run together. Other Linux distributions are valid learning
-choices, but you must translate the bootstrap and keep the same outcomes.
+Use a maintained Linux host with at least 4 CPU cores, 16 GiB RAM, and 80 GiB
+free disk. More memory is useful when GitLab and the full stack run together.
+The Linux distribution, package manager, and host-package versions are not
+course contracts. Use current distribution and vendor guidance to provide the
+required capabilities, then prove each capability directly.
 
 Obtain this repository from the maintainer's Git account by cloning it or by
 copying an archive. Then:
 
-1. Install Git, Docker Engine, the Docker Compose plugin, Python, Ansible, an
-   SSH client and server, and ordinary troubleshooting tools.
+1. Provide Git, Docker Engine, the Docker Compose v2 plugin, Python 3, Ansible,
+   an SSH client and server, and ordinary troubleshooting tools.
 2. Ensure your normal account can operate Docker using your host's intended
    administrative model.
 3. Configure a local hostname for GitLab and confirm it resolves to the local
@@ -90,6 +92,9 @@ copying an archive. Then:
 7. Clone the project back from local GitLab into the location where you will
    do the course work. This verifies that the local instance, repository, and
    Git transport are usable before the stack is involved.
+
+The host shell runner is intentionally deferred until Milestone 10. It is not
+required to create GitLab, transfer the repository, or begin the manual stack.
 
 Do not copy implementation files from the answer branch into the training
 branch. When you consult a reference, return to your own design and explain

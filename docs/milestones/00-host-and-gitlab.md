@@ -13,16 +13,14 @@ the training repository usable from that instance.
   port away from system administration.
 - GitLab configuration, logs, and application data persist outside a disposable
   container layer.
-- A host-installed GitLab Runner uses the shell executor and can run a harmless
-  test job.
 - The training repository can be pushed to and cloned from local GitLab.
 
 ## Create the GitLab Compose project
 
 This bootstrap is the only course area that provides configuration-level
 guidance. Write the Compose file yourself; a finished file is not supplied.
-Follow [the GitLab bootstrap guide](../gitlab-bootstrap.md) for the supported
-new-host procedure. The checklist below is the milestone summary.
+Follow [the GitLab bootstrap guide](../gitlab-bootstrap.md) for the new-host
+procedure. The checklist below is the milestone summary.
 
 1. Create a directory used only for the GitLab Compose project.
 2. Define one GitLab service from a deliberate, recorded image version.
@@ -38,9 +36,7 @@ new-host procedure. The checklist below is the milestone summary.
 8. Start GitLab, follow its startup state, obtain the initial administrator
    credential through the documented image procedure, and sign in.
 9. Recreate the GitLab container and prove that the project and account remain.
-10. Install GitLab Runner on the host, register it with this instance, select
-    the shell executor, and verify an intentionally simple job.
-11. Create a blank **Mini-Manticore Training** project, push the supplied
+10. Create a blank **Mini-Manticore Training** project, push the supplied
     branches, make `training` the default, and clone it back from local GitLab.
 
 Do not place Mini-Manticore services in this Compose project. Do not make the
@@ -52,7 +48,6 @@ future Mini-Manticore Ansible playbooks responsible for GitLab.
 - GitLab is reachable by its selected hostname.
 - GitLab data survives container recreation.
 - Git push and clone work against the local instance.
-- The shell runner is online and completes a test job.
 - The local project uses `training` as its default branch.
 - You can identify the GitLab project directory and the future
   Mini-Manticore work directory as separate administrative boundaries.
@@ -62,6 +57,4 @@ future Mini-Manticore Ansible playbooks responsible for GitLab.
 - Which GitLab image edition and version are suitable for an isolated lab?
 - Why must the external URL agree with how clients reach GitLab?
 - What survives a container recreation, and why?
-- What permissions and environment will a shell job inherit from the runner
-  account?
 - Which host resources does GitLab require before the rest of the stack starts?

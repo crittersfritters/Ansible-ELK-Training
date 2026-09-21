@@ -7,7 +7,8 @@ the Elasticsearch project over SSH to localhost.
 
 ## Behavioral requirements
 
-- The `ansible` account is distinct from the learner and runner accounts.
+- The `ansible` account is distinct from the learner account and the future
+  runner service identity.
 - Key-based SSH, host-key verification, and privilege escalation work through
   the intended account.
 - One inventory host represents the physical host and belongs to all service
