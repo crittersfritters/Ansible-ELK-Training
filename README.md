@@ -28,18 +28,28 @@ reconfigure, restart, or prune Docker because the same daemon owns GitLab.
 
 ## Reference baseline
 
-The release candidate targets Ubuntu 24.04 LTS, GitLab CE `19.3.2-ce.0`,
-Elastic Stack `9.2.8`, Apache Kafka `3.9.2`, and Kafka UI `v0.7.2`. Budget at
-least 4 CPU cores, 16 GiB RAM, and 80 GiB free disk for GitLab and the complete
-stack. All unauthenticated application listeners are restricted to loopback.
+The reference implementation is designed for a maintained Linux host that can
+provide Docker Engine, the Docker Compose v2 plugin, OpenSSH, Python 3, and
+Ansible. The course does not prescribe a Linux distribution, package manager,
+or host-package version. Install host prerequisites using the documentation
+for the selected distribution and the relevant upstream project, then prove
+the required behavior instead of relying on a package name alone.
+
+The release candidate pins GitLab CE `19.3.2-ce.0`, Elastic Stack `9.2.8`,
+Apache Kafka `3.9.2`, and Kafka UI `v0.7.2`. These application versions are
+part of the reproducible reference implementation; they are not a host-
+operating-system requirement. Budget at least 4 CPU cores, 16 GiB RAM, and
+80 GiB free disk for GitLab and the complete stack. All unauthenticated
+application listeners are restricted to loopback.
 
 ## Before the first playbook
 
 1. Complete the [GitLab bootstrap](bootstrap/gitlab/README.md) or compare it
    with the matching training milestone.
 2. Install and configure Zeek to emit JSON under `/opt/zeek/logs/current` and
-   Suricata to emit `/var/log/suricata/eve.json`. The supported-host reference
-   is in [native sensor setup](docs/sensor-host-setup.md).
+   Suricata to emit `/var/log/suricata/eve.json`. The required outcomes and
+   verification boundary are in
+   [native sensor setup](docs/sensor-host-setup.md).
 3. Create the `ansible` account, its privilege policy, and SSH keys. Make
    `mini-manticore.local` resolve to `127.0.0.1`, then verify SSH host keys and
    key authentication instead of disabling host-key checking.
@@ -118,8 +128,8 @@ final course release.
   SSH, and Vault model
 - [Mission parsing](docs/mission-parsing.md) — parser and failure-routing
   explanation
-- [Native sensor setup](docs/sensor-host-setup.md) — Zeek and Suricata
-  installation reference
+- [Native sensor setup](docs/sensor-host-setup.md) — host-neutral Zeek and
+  Suricata runtime contract and verification
 - [GitLab CI](docs/gitlab-ci.md) — advanced dependency-aware reference
   pipeline
 - [Lab reset](docs/lab-reset.md) — bounded resets that leave GitLab alone

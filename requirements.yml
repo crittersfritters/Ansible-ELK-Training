@@ -3,6 +3,6 @@ collections:
   - name: ansible.posix
     version: 2.2.2
   - name: community.docker
-    # Ubuntu 24.04 ships ansible-core 2.16; the 4.x collection line supports
-    # that controller while still providing docker_compose_v2.
+    # The 4.x collection line supplies docker_compose_v2 without making the
+    # course dependent on one distribution's Ansible package set.
     version: 4.8.8

@@ -5,7 +5,7 @@ branch without putting implementation paths into learner instructions.
 
 | Milestone | Contract/evidence | Earliest answer state | Validation |
 |---|---|---|---|
-| 00 Host and GitLab | ports 8929/2224, three persistent paths, shell runner, local clone | GitLab bootstrap commit | GitLab Compose render; runtime health and port publication |
+| 00 Host and GitLab | ports 8929/2224, three persistent paths, local clone | GitLab bootstrap commit | GitLab Compose render; runtime health and port publication |
 | 01 Elastic foundation | four distinct object types and durable test document | manual Elastic commit | exact templates, mappings, indices, aliases, data views |
 | 02 Sensors | fresh Zeek JSON and Suricata EVE records | sensor guidance commit | readable valid source records |
 | 03 Direct path | one event per sensor at the intended index/data view | direct-path commit | native configs and direct end-to-end observation |
