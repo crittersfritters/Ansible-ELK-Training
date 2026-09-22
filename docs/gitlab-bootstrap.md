@@ -76,11 +76,11 @@ project both run successfully.
 
 The complete course runs GitLab and Mini-Manticore on the same machine. Before
 writing the GitLab project, inventory the ports already listening on the host
-and verify that the fixed course ports `8929` for HTTP and `2224` for Git SSH
-are free. Do not bind the container's SSH service to host port `22`; that port
-belongs to the host SSH server used by Ansible. Publish both course ports only
-on `127.0.0.1`; the unauthenticated training instance must not be reachable
-from another host.
+and verify that the fixed course ports `8929` for HTTP, the preserved port
+`443` publication, and `2424` for Git SSH are free. Do not bind the container's
+SSH service to host port `22`; that port belongs to the host SSH server used by
+Ansible. Publish all three course ports only on `127.0.0.1`; the
+unauthenticated training instance must not be reachable from another host.
 
 Add `127.0.0.1 gitlab.local` to `/etc/hosts` with an administrative editor and
 prove that `getent hosts gitlab.local` returns loopback before starting GitLab.
@@ -95,32 +95,39 @@ with the browser request. Do not solve access by changing the publication to
 
 ## Create the Compose project
 
-Create a dedicated host directory for the GitLab project. Its contents must
-not be nested inside a Mini-Manticore service directory.
+Create the dedicated GitLab project at `/var/training/gitlab`, with its Compose
+file directly in that directory. Its contents must not be nested inside a
+Mini-Manticore service directory.
 
 Write a Compose file with one GitLab service. It must satisfy every item in
 this table.
 
 | Area | Requirement |
 |---|---|
-| Edition | Use the official GitLab Community Edition image, `gitlab/gitlab-ce`. |
-| Version | Pin a complete image tag. Do not use `latest`. The release-candidate baseline is `19.3.2-ce.0`; later releases must select a current security-patched version deliberately. |
-| Service identity | Give the service and container stable, recognizable names. |
+| Image | Use the exact course baseline `gitlab/gitlab-ee:18.2.0-ee.0`. Do not substitute CE, `latest`, or another release. |
+| Project identity | Use `gitlab` as the Compose project, service, and container name. |
 | Hostname | Configure GitLab to identify itself as `gitlab.local`. |
 | Network mode | Use ordinary Compose port publishing rather than host networking. GitLab's internal SSH listener must remain distinct from the host SSH listener. |
-| External web URL | Set GitLab's `external_url` to the hostname and host web port you reserved. |
-| Advertised SSH port | Set `gitlab_rails['gitlab_shell_ssh_port']` to the host-side Git SSH port you reserved. |
-| Published ports | Bind host ports `8929` and `2224` to `127.0.0.1`; publish them to GitLab's configured web listener and container port `22`, respectively. |
-| Persistence | Bind-mount or volume-mount GitLab's `/etc/gitlab`, `/var/log/gitlab`, and `/var/opt/gitlab` directories to three separate persistent locations. |
+| External web URL | Set GitLab's `external_url` to `http://gitlab.local:8929`. |
+| Advertised SSH port | Set `gitlab_rails['gitlab_shell_ssh_port']` to `2424`. |
+| Published ports | Publish exactly `127.0.0.1:8929` to container port `8929`, `127.0.0.1:443` to container port `443`, and `127.0.0.1:2424` to container port `22`. |
+| Persistence | Bind-mount `/var/training/gitlab/config`, `/var/training/gitlab/logs`, and `/var/training/gitlab/data` to `/etc/gitlab`, `/var/log/gitlab`, and `/var/opt/gitlab`, respectively. Account for SELinux labeling. |
 | Restart behavior | Configure GitLab to return after an ordinary host or Docker restart. |
 | Shared memory | Allocate at least 256 MiB of shared memory to the GitLab service. |
 | Secrets | Do not commit a root password, runner authentication token, personal access token, or SSH private key in the Compose file. |
 
 The GitLab image supports embedded configuration through its documented
 environment setting. Use it to keep the external URL and advertised SSH port
-consistent with the ports you publish. Investigate the relationship among the
+consistent with the ports you publish. The port `443` publication preserves a
+course endpoint; it does not enable TLS while the external URL remains HTTP.
+Investigate the relationship among the
 external URL, the internal listener, the published host port, and the clone URL
 before starting the service.
+
+The pinned EE 18.2.0 image records the existing course environment. Treat an
+edition or version change as a maintainer-led contract revision that requires
+an upgrade plan and complete revalidation, not as a learner-selected bootstrap
+variation.
 
 The three persistent locations have different purposes:
 
@@ -128,14 +135,15 @@ The three persistent locations have different purposes:
 - logs are needed to diagnose startup and application failures; and
 - application data contains repositories and database state.
 
-Use paths or named volumes that are unambiguous and will not be swept up by a
-Mini-Manticore reset. Account for the host's file permissions and any active
-mandatory-access-control mechanism.
+Use the required `/var/training/gitlab` host paths so they cannot be swept up
+by a Mini-Manticore reset. Account for the host's file permissions and any
+active mandatory-access-control mechanism.
 
 ## Start and initialize GitLab
 
-Render the Compose configuration before starting it. Resolve syntax errors,
-unexpanded variables, invalid mounts, and port collisions before proceeding.
+Run Compose from `/var/training/gitlab` and render the configuration before
+starting it. Resolve syntax errors, unexpanded variables, invalid mounts, and
+port collisions before proceeding.
 
 Start the project and observe its logs. GitLab takes longer to initialize than
 a small single-process container. A running container is not sufficient proof
@@ -169,9 +177,11 @@ The resulting project must contain the course history, not a single commit made
 from an extracted working tree. Set `training` as the default branch. You may
 work in a personal branch while keeping the imported branch unchanged.
 
-Prove both a fetch and a push from the host. If using SSH, confirm that the
-clone URL includes the nonstandard Git SSH port. If using HTTP, confirm that it
-includes the configured web port.
+Prove both a fetch and a push from the host. An SSH clone URL must have the
+form `ssh://git@gitlab.local:2424/<namespace>/mini-manticore-training.git`; an
+HTTP URL must have the form
+`http://gitlab.local:8929/<namespace>/mini-manticore-training.git`. Substitute
+your actual namespace without changing the course ports.
 
 Clone the project back from local GitLab into a separate course working
 directory. Confirm that the clone checks out `training` by default and retains
@@ -189,11 +199,15 @@ progression are understood.
 This milestone is complete only when all of the following are true:
 
 - `gitlab.local` resolves on the host;
+- the active Compose project, service, and container are all named `gitlab`;
+- the active image is exactly `gitlab/gitlab-ee:18.2.0-ee.0`;
 - the Compose configuration renders without error;
-- the GitLab service becomes ready at the advertised web URL;
+- the GitLab container becomes healthy and the sign-in page responds at
+  `http://gitlab.local:8929/users/sign_in`;
+- only loopback publishes `8929:8929`, `443:443`, and `2424:22`;
 - the web and Git SSH ports do not displace host SSH or a Mini-Manticore port;
-- configuration, logs, and application data remain after container
-  recreation;
+- `/var/training/gitlab/config`, `/var/training/gitlab/logs`, and
+  `/var/training/gitlab/data` remain after container recreation;
 - the **Mini-Manticore Training** project preserves the imported history;
 - the learner can fetch and push through the chosen Git transport;
 - a fresh clone from local GitLab checks out `training` and retains history;
@@ -206,7 +220,10 @@ behavior.
 
 ## Questions to investigate
 
+- Why is the GitLab image pinned, and what must be evaluated before the course
+  changes its edition or version?
 - Why must GitLab's advertised external URL agree with its published port?
+- Why does publishing port `443` not, by itself, enable HTTPS?
 - Why is the container's SSH port mapped away from host port `22`?
 - What state is lost if only GitLab's configuration directory is persistent?
 - Which Git operations prove that the repository was transferred intact?

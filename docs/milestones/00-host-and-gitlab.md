@@ -22,15 +22,18 @@ guidance. Write the Compose file yourself; a finished file is not supplied.
 Follow [the GitLab bootstrap guide](../gitlab-bootstrap.md) for the new-host
 procedure. The checklist below is the milestone summary.
 
-1. Create a directory used only for the GitLab Compose project.
-2. Define one GitLab service from a deliberate, recorded image version.
-3. Configure GitLab's external URL to match the local hostname you added to
-   host name resolution.
-4. Publish a browser port and a distinct Git-over-SSH host port. Keep the host's
-   existing SSH service reachable.
-5. Persist GitLab's configuration, logs, and application data separately. The
-   container paths normally used by the omnibus image are `/etc/gitlab`,
-   `/var/log/gitlab`, and `/var/opt/gitlab`.
+1. Create `/var/training/gitlab` for this Compose project and keep its Compose
+   file at that root.
+2. Define the project, service, and container as `gitlab`, using the exact
+   image `gitlab/gitlab-ee:18.2.0-ee.0`.
+3. Configure GitLab's external URL as `http://gitlab.local:8929` and its
+   advertised Git SSH port as `2424`.
+4. Publish `8929:8929`, `443:443`, and `2424:22` only on `127.0.0.1`. Keep the
+   host's existing SSH service on port `22` reachable. Port `443` is preserved
+   by the course contract but is not evidence that HTTPS works.
+5. Bind-mount `/var/training/gitlab/config`,
+   `/var/training/gitlab/logs`, and `/var/training/gitlab/data` to
+   `/etc/gitlab`, `/var/log/gitlab`, and `/var/opt/gitlab`, respectively.
 6. Add a restart policy and account for GitLab's startup time and resource use.
 7. Render or validate the Compose model before starting it.
 8. Start GitLab, follow its startup state, obtain the initial administrator
@@ -45,7 +48,11 @@ future Mini-Manticore Ansible playbooks responsible for GitLab.
 ## Completion criteria
 
 - Docker and Compose can start and inspect a test workload.
-- GitLab is reachable by its selected hostname.
+- GitLab runs as project/service/container `gitlab` from the pinned EE 18.2.0
+  image.
+- GitLab is healthy, and
+  `http://gitlab.local:8929/users/sign_in` responds.
+- its three required publications exist only on loopback;
 - GitLab data survives container recreation.
 - Git push and clone work against the local instance.
 - The local project uses `training` as its default branch.
@@ -54,7 +61,8 @@ future Mini-Manticore Ansible playbooks responsible for GitLab.
 
 ## Research prompts
 
-- Which GitLab image edition and version are suitable for an isolated lab?
+- Why is the course image pinned, and what upgrade, migration, and validation
+  questions must be answered before changing its edition or version?
 - Why must the external URL agree with how clients reach GitLab?
 - What survives a container recreation, and why?
 - Which host resources does GitLab require before the rest of the stack starts?

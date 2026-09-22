@@ -40,7 +40,8 @@ not a general production recommendation.
 |---|---:|
 | Host SSH | 22 |
 | GitLab HTTP | 8929 |
-| GitLab Git-over-SSH | 2224 |
+| GitLab port 443 publication (TLS not configured) | 443 |
+| GitLab Git-over-SSH | 2424 |
 | Mission input | 4444 |
 | Temporary direct Zeek / Suricata inputs | 5044 / 5045 |
 | Kibana / Kafka UI | 5601 / 8080 |
@@ -49,7 +50,9 @@ not a general production recommendation.
 | Processing / port-router Logstash APIs | 9600 / 9601 |
 
 Every no-authentication application endpoint must listen only on loopback.
-Host SSH may follow the host's administrative policy.
+Host SSH may follow the host's administrative policy. Publishing GitLab port
+`443` preserves the course endpoint but does not provide TLS while the
+external URL remains `http://gitlab.local:8929`.
 
 ### Runtime names and paths
 
@@ -58,6 +61,13 @@ Use project/container names `elasticsearch`, `kibana`, `kafka` (with
 `logstash_port-router`, `filebeat_zeek`, and `filebeat_suricata`. The
 port-router pipeline ID is also `logstash_port-router`; the processing IDs are
 `zeek`, `suricata`, and `grok_pipeline`.
+
+GitLab is the independent Compose project, service, and container `gitlab`
+under `/var/training/gitlab`. Its Compose file lives at that project root. It
+uses `gitlab/gitlab-ee:18.2.0-ee.0`, advertises
+`http://gitlab.local:8929` and Git SSH port `2424`, and bind-mounts the
+project's `config`, `logs`, and `data` directories to GitLab's configuration,
+log, and application-data paths.
 
 The final automated deployment root is `/var/docker`. Zeek's stable mount root
 is `/opt/zeek/logs`, its active JSON logs are under
@@ -87,10 +97,13 @@ source time, or invalid source time belongs at `active-unparsed`.
 
 ### Release-candidate component baseline
 
-The reference candidate uses GitLab CE `19.3.2-ce.0`, Elastic Stack `9.2.8`,
+The reference candidate preserves GitLab EE `18.2.0-ee.0` and uses Elastic
+Stack `9.2.8`,
 Apache Kafka `3.9.2`, and Kafka UI `v0.7.2`. Do not substitute mutable
-`latest` tags. The release remains a candidate until the maintainer records a
-full runtime validation and the host platform used to produce that evidence.
+`latest` tags. A GitLab edition or version change is a maintainer-led contract
+revision, not a learner choice. The release remains a candidate until the
+maintainer records a full runtime validation and the host platform used to
+produce that evidence.
 
 ## Required topology
 
