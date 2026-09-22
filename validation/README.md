@@ -35,6 +35,8 @@ The static suite checks:
   Filebeat configurations;
 - YAML syntax when Python and PyYAML are available;
 - concrete Compose files with `docker compose config` when any exist;
+- the GitLab bootstrap's exact pinned image, identity, Omnibus settings,
+  loopback publications, and persistent mounts;
 - Ansible inventory structure and playbook syntax when Ansible is available;
 - the localhost inventory model: one host in all six service groups;
 - the presence of Logstash, Filebeat, all four mission samples, and CI
@@ -48,9 +50,12 @@ The runtime suite checks, without changing the running stack:
 - rendered Compose files under `/var/docker`;
 - required healthy/running containers and the successful one-shot topic
   initializer;
-- Elasticsearch, available Kibana, Kafka UI, GitLab, and both Logstash API
-  endpoints;
-- loopback-only listeners and GitLab's exact Docker port publications;
+- Elasticsearch, available Kibana, Kafka UI, the GitLab sign-in page, and both
+  Logstash API endpoints;
+- GitLab's Docker-reported health, pinned image, Compose ownership, persistent
+  mounts, Omnibus settings, and exact HTTP, port 443, and SSH loopback
+  publications;
+- loopback-only listeners for the host-networked Mini-Manticore ports;
 - Zeek and Suricata source logs;
 - required Kafka topics;
 - Elasticsearch backing-index mappings, write aliases, and applicable

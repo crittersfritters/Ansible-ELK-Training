@@ -33,7 +33,8 @@ The managed host entry also retains readable legacy short names (`web`,
 | Purpose | Port |
 |---|---:|
 | GitLab HTTP | 8929 |
-| GitLab SSH | 2224 |
+| GitLab port 443 publication (TLS not configured) | 443 |
+| GitLab SSH | 2424 |
 | Mission TCP input | 4444 |
 | Direct-path checkpoint Zeek Beats input | 5044 (removed after Kafka insertion) |
 | Direct-path checkpoint Suricata Beats input | 5045 (removed after Kafka insertion) |
@@ -46,14 +47,17 @@ The managed host entry also retains readable legacy short names (`web`,
 | Port-router Logstash API | 9601 |
 
 Except for host SSH, every active final-state listener is loopback-only. GitLab
-publishes its two ports to `127.0.0.1`; Mini-Manticore services bind directly
-to `127.0.0.1` while using host networking. Ports 5044 and 5045 exist only in
-the earlier direct-path checkpoint.
+publishes HTTP, the reserved HTTPS port, and Git SSH to `127.0.0.1`;
+Mini-Manticore services bind directly to `127.0.0.1` while using host
+networking. The HTTPS publication does not provide TLS while GitLab's external
+URL remains `http://gitlab.local:8929`. Ports 5044 and 5045 exist only in the
+earlier direct-path checkpoint.
 
 ## Compose projects and containers
 
 | Project | Long-running containers | One-shot containers |
 |---|---|---|
+| `gitlab` | `gitlab` | |
 | `elasticsearch` | `elasticsearch` | |
 | `kibana` | `kibana` | |
 | `kafka` | `kafka`, `kafka-ui` | `kafka-topics-init` |
@@ -62,12 +66,20 @@ the earlier direct-path checkpoint.
 | `filebeat_zeek` | `filebeat_zeek` | |
 | `filebeat_suricata` | `filebeat_suricata` | |
 
-GitLab is an eighth, independently managed Compose project and must not be
-removed, restarted, or adopted by Mini-Manticore automation.
+GitLab is an eighth, independently managed Compose project under
+`/var/training/gitlab` and must not be removed, restarted, or adopted by
+Mini-Manticore automation. It preserves the existing
+`gitlab/gitlab-ee:18.2.0-ee.0` baseline, uses
+`http://gitlab.local:8929` as its external URL, advertises SSH port `2424`,
+and mounts `config`, `logs`, and `data` from that project root. A version or
+edition change is outside the course bootstrap contract.
 
 ## Persistent and source paths
 
 - Mini-Manticore projects: `/var/docker/<project>`
+- GitLab project and Compose file: `/var/training/gitlab`
+- GitLab configuration, logs, and data: `/var/training/gitlab/config`,
+  `/var/training/gitlab/logs`, and `/var/training/gitlab/data`
 - Elasticsearch data: `/var/docker/elasticsearch/data`
 - Kibana data: `/var/docker/kibana/data`
 - Kafka data: `/var/docker/kafka/data`

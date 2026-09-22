@@ -119,14 +119,131 @@ check_containers() {
 }
 
 check_gitlab_bindings() {
-  section "GitLab published-port bindings"
+  section "GitLab runtime contract"
   set_docker_command
   if ! have_command "${DOCKER_PARTS[0]}" || ! have_command python3; then
-    skip "Docker and Python 3 are required for GitLab binding checks"
+    skip "Docker and Python 3 are required for GitLab runtime checks"
     return
   fi
 
-  local bindings output
+  local actual_image bindings metadata output
+  if actual_image=$(
+    "${DOCKER_PARTS[@]}" inspect --format '{{.Config.Image}}' \
+      "$GITLAB_CONTAINER" 2>&1
+  ); then
+    if [[ "$actual_image" == "$GITLAB_IMAGE" ]]; then
+      pass "GitLab uses the pinned image $GITLAB_IMAGE"
+    else
+      fail "GitLab image is $actual_image; expected $GITLAB_IMAGE"
+    fi
+  else
+    fail "GitLab image could not be inspected"
+    show_command_failure "$actual_image"
+  fi
+
+  if ! metadata=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{json .}}' "$GITLAB_CONTAINER" 2>&1); then
+    fail "GitLab runtime metadata could not be inspected"
+    show_command_failure "$metadata"
+    return
+  fi
+  if output=$(python3 - \
+    "$GITLAB_COMPOSE_PROJECT" \
+    "$GITLAB_COMPOSE_SERVICE" \
+    "$GITLAB_COMPOSE_WORKDIR" \
+    "$GITLAB_COMPOSE_FILE" \
+    "$GITLAB_EXTERNAL_URL" \
+    "$GITLAB_SSH_PORT" \
+    $GITLAB_MOUNT_BINDINGS \
+    3<<< "$metadata" <<'PY'
+import json
+import os
+import sys
+from collections import Counter
+
+with os.fdopen(3) as stream:
+    container = json.load(stream)
+
+(
+    expected_project,
+    expected_service,
+    expected_workdir,
+    expected_compose_file,
+    expected_external_url,
+    expected_ssh_port,
+) = sys.argv[1:7]
+expected_mount_specs = sys.argv[7:]
+problems = []
+
+labels = container.get("Config", {}).get("Labels") or {}
+expected_labels = {
+    "com.docker.compose.project": expected_project,
+    "com.docker.compose.service": expected_service,
+    "com.docker.compose.project.working_dir": expected_workdir,
+    "com.docker.compose.project.config_files": expected_compose_file,
+}
+for label, expected in expected_labels.items():
+    actual = labels.get(label)
+    if actual != expected:
+        problems.append(f"label {label!r}: expected {expected!r}, got {actual!r}")
+
+expected_mounts = Counter(
+    ("bind", source, destination, True)
+    for source, destination in (
+        spec.split(":", 1) for spec in expected_mount_specs
+    )
+)
+actual_mounts = Counter(
+    (
+        mount.get("Type"),
+        mount.get("Source"),
+        mount.get("Destination"),
+        mount.get("RW"),
+    )
+    for mount in container.get("Mounts", [])
+)
+if actual_mounts != expected_mounts:
+    problems.append(
+        f"mounts: expected {sorted(expected_mounts.elements())!r}, "
+        f"got {sorted(actual_mounts.elements())!r}"
+    )
+
+environment = container.get("Config", {}).get("Env") or []
+prefix = "GITLAB_OMNIBUS_CONFIG="
+omnibus_values = [value[len(prefix):] for value in environment if value.startswith(prefix)]
+if len(omnibus_values) != 1:
+    problems.append(
+        f"expected one GITLAB_OMNIBUS_CONFIG value, got {len(omnibus_values)}"
+    )
+else:
+    actual_lines = Counter(
+        statement.strip()
+        for line in omnibus_values[0].splitlines()
+        for statement in line.split(";")
+        if statement.strip()
+    )
+    expected_lines = Counter({
+        f"external_url '{expected_external_url}'",
+        f"gitlab_rails['gitlab_shell_ssh_port'] = {expected_ssh_port}",
+    })
+    if actual_lines != expected_lines:
+        problems.append(
+            "GITLAB_OMNIBUS_CONFIG: expected "
+            f"{sorted(expected_lines.elements())!r}, "
+            f"got {sorted(actual_lines.elements())!r}"
+        )
+
+if problems:
+    print("\n".join(problems))
+    raise SystemExit(1)
+PY
+  ); then
+    pass "GitLab uses the required Compose project, working directory, configuration, and mounts"
+  else
+    fail "GitLab runtime ownership or persistence diverges from the course contract"
+    show_command_failure "$output"
+  fi
+
   if ! bindings=$("${DOCKER_PARTS[@]}" inspect \
     --format '{{json .NetworkSettings.Ports}}' "$GITLAB_CONTAINER" 2>&1); then
     fail "GitLab port bindings could not be inspected"
@@ -137,26 +254,33 @@ check_gitlab_bindings() {
 import json
 import os
 import sys
+from collections import Counter
 
 with os.fdopen(3) as stream:
     ports = json.load(stream)
-problems = []
-for spec in sys.argv[1:]:
-    container_port, expected_ip, expected_port = spec.split(":", 2)
-    entries = ports.get(container_port) or []
-    if not any(
-        entry.get("HostIp") == expected_ip and entry.get("HostPort") == expected_port
-        for entry in entries
-    ):
-        problems.append(
-            f"{container_port} is not published as {expected_ip}:{expected_port}; got {entries!r}"
-        )
-if problems:
-    print("\n".join(problems))
+
+expected = Counter(tuple(spec.split(":", 2)) for spec in sys.argv[1:])
+actual = Counter(
+    (container_port, entry.get("HostIp"), entry.get("HostPort"))
+    for container_port, entries in ports.items()
+    for entry in (entries or [])
+)
+
+if actual != expected:
+    missing = expected - actual
+    unexpected = actual - expected
+    if missing:
+        print("missing bindings:")
+        for binding, count in sorted(missing.items()):
+            print(f"  {binding!r} x{count}")
+    if unexpected:
+        print("unexpected bindings:")
+        for binding, count in sorted(unexpected.items()):
+            print(f"  {binding!r} x{count}")
     raise SystemExit(1)
 PY
   ); then
-    pass "GitLab HTTP and SSH ports are published only on the expected loopback addresses"
+    pass "GitLab has exactly the required HTTP, port 443, and SSH loopback publications"
   else
     fail "GitLab does not implement the required loopback-only port bindings"
     show_command_failure "$output"
@@ -230,7 +354,7 @@ PY
     show_command_failure "$kibana_status"
   fi
   check_http_endpoint "Kafka UI" "$KAFKA_UI_URL/"
-  check_http_endpoint "GitLab health" "${GITLAB_URL:-http://127.0.0.1:8929}/-/health"
+  check_http_endpoint "GitLab sign-in page" "${GITLAB_URL%/}/users/sign_in"
 
   local pipeline
   for pipeline in $LOGSTASH_PIPELINE_IDS; do

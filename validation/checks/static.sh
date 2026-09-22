@@ -174,6 +174,117 @@ check_concrete_compose_files() {
   fi
 }
 
+check_gitlab_bootstrap_contract() {
+  section "GitLab bootstrap contract"
+  local compose="$PROJECT_ROOT/bootstrap/gitlab/docker-compose.yml"
+
+  if [[ ! -f "$compose" ]]; then
+    fail "GitLab bootstrap Compose file is missing"
+    return
+  fi
+  if ! have_command python3 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    skip "Python 3 with PyYAML is unavailable; the GitLab Compose contract was not evaluated"
+    return
+  fi
+
+  local output
+  if output=$(python3 - "$compose" <<'PY'
+import pathlib
+import sys
+from collections import Counter
+
+import yaml
+
+path = pathlib.Path(sys.argv[1])
+document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+problems = []
+
+if document.get("name") != "gitlab":
+    problems.append("top-level Compose project name must be 'gitlab'")
+
+services = document.get("services") or {}
+if set(services) != {"gitlab"}:
+    problems.append(f"services must contain only 'gitlab'; got {sorted(services)!r}")
+service = services.get("gitlab") or {}
+
+expected_scalars = {
+    "image": "gitlab/gitlab-ee:18.2.0-ee.0",
+    "container_name": "gitlab",
+    "hostname": "gitlab.local",
+    "restart": "unless-stopped",
+    "shm_size": "256m",
+}
+for field, expected in expected_scalars.items():
+    actual = service.get(field)
+    if str(actual) != expected:
+        problems.append(f"gitlab.{field} must be {expected!r}; got {actual!r}")
+
+environment = service.get("environment") or {}
+if not isinstance(environment, dict):
+    problems.append("gitlab.environment must use mapping syntax")
+    omnibus = ""
+else:
+    omnibus = environment.get("GITLAB_OMNIBUS_CONFIG", "")
+required_omnibus_lines = Counter({
+    "external_url 'http://gitlab.local:8929'",
+    "gitlab_rails['gitlab_shell_ssh_port'] = 2424",
+})
+actual_omnibus_lines = Counter(
+    statement.strip()
+    for line in str(omnibus).splitlines()
+    for statement in line.split(";")
+    if statement.strip()
+)
+if actual_omnibus_lines != required_omnibus_lines:
+    missing_omnibus = required_omnibus_lines - actual_omnibus_lines
+    unexpected_omnibus = actual_omnibus_lines - required_omnibus_lines
+    if missing_omnibus:
+        problems.append(
+            "GITLAB_OMNIBUS_CONFIG is missing: "
+            + ", ".join(sorted(missing_omnibus.elements()))
+        )
+    if unexpected_omnibus:
+        problems.append(
+            "GITLAB_OMNIBUS_CONFIG has unexpected settings: "
+            + ", ".join(sorted(unexpected_omnibus.elements()))
+        )
+
+expected_ports = Counter({
+    "127.0.0.1:8929:8929",
+    "127.0.0.1:443:443",
+    "127.0.0.1:2424:22",
+})
+actual_ports = Counter(str(value) for value in (service.get("ports") or []))
+if actual_ports != expected_ports:
+    problems.append(
+        f"gitlab.ports must be exactly {sorted(expected_ports.elements())!r}; "
+        f"got {sorted(actual_ports.elements())!r}"
+    )
+
+expected_volumes = Counter({
+    "/var/training/gitlab/config:/etc/gitlab:Z",
+    "/var/training/gitlab/logs:/var/log/gitlab:Z",
+    "/var/training/gitlab/data:/var/opt/gitlab:Z",
+})
+actual_volumes = Counter(str(value) for value in (service.get("volumes") or []))
+if actual_volumes != expected_volumes:
+    problems.append(
+        f"gitlab.volumes must be exactly {sorted(expected_volumes.elements())!r}; "
+        f"got {sorted(actual_volumes.elements())!r}"
+    )
+
+if problems:
+    print("\n".join(problems))
+    raise SystemExit(1)
+PY
+  ); then
+    pass "GitLab bootstrap Compose implements the pinned course contract"
+  else
+    fail "GitLab bootstrap Compose diverges from the pinned course contract"
+    show_command_failure "$output"
+  fi
+}
+
 check_ansible_inventory() {
   section "Ansible inventory"
   local inventory="$PROJECT_ROOT/$INVENTORY_FILE"
@@ -425,6 +536,7 @@ run_static_checks() {
   check_yaml_syntax
   check_reference_templates
   check_concrete_compose_files
+  check_gitlab_bootstrap_contract
   check_ansible_inventory
   check_ansible_syntax
   check_configuration_assets

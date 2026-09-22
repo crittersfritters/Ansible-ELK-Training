@@ -35,10 +35,12 @@ or host-package version. Install host prerequisites using the documentation
 for the selected distribution and the relevant upstream project, then prove
 the required behavior instead of relying on a package name alone.
 
-The release candidate pins GitLab CE `19.3.2-ce.0`, Elastic Stack `9.2.8`,
+The release candidate preserves the lab's GitLab EE `18.2.0-ee.0` baseline,
+and pins Elastic Stack `9.2.8`,
 Apache Kafka `3.9.2`, and Kafka UI `v0.7.2`. These application versions are
 part of the reproducible reference implementation; they are not a host-
-operating-system requirement. Budget at least 4 CPU cores, 16 GiB RAM, and
+operating-system requirement or a recommendation to deploy an old GitLab
+release elsewhere. Budget at least 4 CPU cores, 16 GiB RAM, and
 80 GiB free disk for GitLab and the complete stack. All unauthenticated
 application listeners are restricted to loopback.
 
