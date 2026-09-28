@@ -124,6 +124,60 @@ check_reference_templates() {
   rm -rf -- "$temp_dir"
 }
 
+check_sensor_collector_templates() {
+  section "Sensor collector template contract"
+  if ! have_command python3 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    skip "Python 3 with PyYAML is unavailable; sensor template branches were not evaluated"
+    return
+  fi
+
+  local output
+  if output=$(python3 \
+    "$VALIDATION_DIR/lib/check_sensor_templates.py" \
+    "$PROJECT_ROOT" 2>&1); then
+    pass "Sensor templates preserve canonical read-only sources and SELinux portability"
+    note "$output"
+  else
+    fail "Sensor template contract is incorrect"
+    show_command_failure "$output"
+  fi
+}
+
+check_loopback_listener_classifier() {
+  section "Loopback listener classification"
+
+  local port=9443 address failures=0
+  local -a accepted=(
+    "127.0.0.1:${port}"
+    "[::1]:${port}"
+    "[::ffff:127.0.0.1]:${port}"
+  )
+  local -a rejected=(
+    "0.0.0.0:${port}"
+    "192.0.2.10:${port}"
+    "*:${port}"
+    "[::]:${port}"
+    "[::ffff:192.0.2.10]:${port}"
+  )
+
+  for address in "${accepted[@]}"; do
+    if ! is_expected_loopback_listener "$address" "$port"; then
+      fail "Expected loopback endpoint was rejected: $address"
+      failures=$((failures + 1))
+    fi
+  done
+  for address in "${rejected[@]}"; do
+    if is_expected_loopback_listener "$address" "$port"; then
+      fail "Non-loopback endpoint was accepted: $address"
+      failures=$((failures + 1))
+    fi
+  done
+
+  if (( failures == 0 )); then
+    pass "IPv4, IPv6, and IPv4-mapped loopback endpoints are classified safely"
+  fi
+}
+
 set_docker_command() {
   read -r -a DOCKER_PARTS <<< "$DOCKER_COMMAND"
   if (( ${#DOCKER_PARTS[@]} == 0 )); then
@@ -535,6 +589,8 @@ run_static_checks() {
   check_required_paths
   check_yaml_syntax
   check_reference_templates
+  check_sensor_collector_templates
+  check_loopback_listener_classifier
   check_concrete_compose_files
   check_gitlab_bootstrap_contract
   check_ansible_inventory

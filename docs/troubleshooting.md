@@ -13,6 +13,9 @@ topics, parsing, indexing, aliases, or data views.
 | Kafka client connects then fails | advertised listener and container alias resolution |
 | Topic is empty | Filebeat source path, registry, JSON decoding, output, topic spelling |
 | Topic has data; index does not | processing pipeline health, consumer group, timestamp conversion, output alias |
+| Filebeat is healthy; source remains empty | canonical source path, exact bind mounts, registry, and byte-level access inside the collector |
+| Container label is empty or `spc_t` | Docker SELinux integration and recreation from the owning Compose project |
+| Suricata read causes an AVC | dedicated log-reader process type and a plain read-only mount; preserve the native log label |
 | Mission record is unparsed | exact source line, parser order, anchors, Grok tags, Date failure |
 | Index has data; Kibana does not | data-view title, time field, time range, source timestamp |
 | Changed configuration has no effect | owning role, rendered file, container recreation/restart |
@@ -80,6 +83,28 @@ For Zeek, inspect a source line and confirm it is valid JSON. If Filebeat is
 healthy but no small fixture is ingested, inspect the filestream fingerprint
 configuration and registry state. The reference uses a 64-byte fingerprint so
 small training records are eligible.
+
+Resolve the Zeek paths in the running collector and compare them with its
+mounts. If `current` was administratively retargeted or `SpoolDir` changed,
+rerun the sensor role so the external canonical mount and Filebeat input are
+regenerated:
+
+```bash
+docker exec filebeat_zeek \
+  readlink --canonicalize-existing -- /opt/zeek/logs/current
+docker inspect --format '{{json .Mounts}}' filebeat_zeek
+```
+
+For a Suricata denial, inspect the effective process label, security option,
+mount mode, and source label. The intended correction is the narrow
+`container_logreader_t` process type with `/var/log/suricata` mounted plain
+read-only. Do not use `audit2allow`, disable enforcement, add `:z`/`:Z`, or
+relabel the host log tree as `container_file_t` for this known case.
+
+Container health tests prove configuration parsing and Kafka reachability;
+they do not prove a source file can be opened. The runtime validator therefore
+byte-reads the actual Zeek and Suricata sources from their corresponding
+collectors.
 
 ## Elasticsearch and Kibana
 

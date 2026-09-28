@@ -120,6 +120,24 @@ A successful syntax check or a running process is not enough. Generate traffic
 that should cross the chosen source and show that a relevant log receives a
 fresh record.
 
+The visible `current` path can be a symbolic link whose canonical target lies
+outside `/opt/zeek/logs`. Record both canonical paths instead of assuming the
+directory layout from the spelling of the link:
+
+```bash
+sudo readlink --canonicalize-existing -- /opt/zeek/logs
+sudo readlink --canonicalize-existing -- /opt/zeek/logs/current
+```
+
+The answer role discovers those paths on every run. It mounts the canonical
+stable root read-only and, when the active target is outside that root, adds an
+exact second read-only bind for the active directory. Filebeat reads the
+canonical active path. Ordinary ZeekControl rotation replaces files within the
+active directory and does not require a redeployment. If an administrator
+changes `SpoolDir` or otherwise retargets `current`, rerun
+`roles-network_sensors.yml` so Ansible regenerates the Filebeat input and
+Compose mounts.
+
 ## Configure and prove Suricata
 
 In the installed Suricata configuration:
@@ -175,11 +193,26 @@ fresh record. A valid but stale file does not prove the active capture path.
 The manual and Ansible Filebeat projects mount the sensor log roots read-only.
 The sensors retain ownership of their live logs; Filebeat only consumes them.
 
+Native sensor mounts use plain `ro`, never `:z` or `:Z`. Private relabeling is
+appropriate for the collector-owned configuration and registry mounts, but it
+must not convert host-service logs into container-owned data.
+
 Do not make the trees broadly writable to bypass a permission error. Confirm
 ordinary file traversal and read permissions, then account for the host's
 mandatory-access-control mechanism when one is active. Container root does not
 bypass that policy. Use a narrow, documented read-only policy and prove access
 from the actual Filebeat container instead of weakening unrelated host data.
+
+On an SELinux-enabled host, Docker must itself participate in SELinux
+confinement before these projects are deployed. The answer keeps Zeek
+Filebeat in the ordinary `container_t` domain and runs only Suricata Filebeat
+as `container_logreader_t`. The Suricata tree retains its native host-log
+label (`var_log_t` on the validated Fedora reference host). Do not relabel
+`/var/log/suricata` as `container_file_t`, add a persistent container fcontext
+rule, disable enforcement, or generate an `audit2allow` module for this known
+read boundary. If the selected host policy does not provide
+`container_logreader_t`, stop and resolve that prerequisite rather than
+silently weakening the host log policy.
 
 Log rotation must preserve the stable roots and active filenames consumed by
 Filebeat. Recheck the mount after rotation or sensor restart rather than
@@ -193,7 +226,11 @@ Retain evidence showing:
 - the chosen capture source and why it sees the test traffic;
 - successful native configuration validation;
 - a fresh, valid JSON record from each sensor at the course-facing path;
-- read access from each corresponding Filebeat container; and
+- the canonical Zeek active target and every bind required to reach it;
+- byte-level read access from each corresponding Filebeat container;
+- read-only, non-relabeling native-log mounts;
+- effective collector confinement and unchanged native sensor labels when
+  mandatory access control is active; and
 - permissions and host security controls that remain no broader than needed.
 
 Consult current vendor guidance before installing or changing a sensor:

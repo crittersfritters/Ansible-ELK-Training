@@ -87,6 +87,13 @@ edition change is outside the course bootstrap contract.
 - Zeek active JSON logs: `/opt/zeek/logs/current`
 - Suricata events: `/var/log/suricata/eve.json`
 
+The Zeek paths above are declared interfaces, not proof that the active files
+physically reside below the stable root. The answer resolves both paths
+canonically. If the active directory is outside the canonical root, it receives
+its own source-equals-destination read-only bind. Changing the active target
+requires rerunning the sensor role. Both native sensor sources are mounted
+read-only without `:z` or `:Z` relabeling.
+
 ## Kafka contract
 
 | Topic | Producer | Consumer |
@@ -143,3 +150,11 @@ The isolated course intentionally uses host networking, plaintext protocols,
 and no application authentication. It is not production guidance. Secrets used
 for SSH privilege escalation begin as local plaintext learning data and then
 progress to whole-file Ansible Vault encryption and a masked GitLab variable.
+
+Docker remains operator-owned, but on a host with SELinux enabled it must
+report SELinux integration before deployment. Existing containers must be
+recreated after that daemon capability is enabled. The answer expects ordinary
+containers, including Zeek Filebeat, to run as `container_t`; Suricata
+Filebeat alone uses `container_logreader_t`. Its native log tree keeps the
+host's normal log label (`var_log_t` on the Fedora reference host) and must not
+be relabeled as container storage.

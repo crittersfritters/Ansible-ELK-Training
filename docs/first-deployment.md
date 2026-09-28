@@ -23,6 +23,24 @@ sudo test -s /var/log/suricata/eve.json
 sudo ss -ltnp
 ```
 
+When the host uses SELinux, confirm Docker reports `name=selinux` in its
+security options before deploying anything under `/var/docker`. Inspect the
+already-bootstrapped GitLab container as well: an empty process label or
+`spc_t` means the container predates working Docker SELinux integration and
+must be recreated from its owning Compose project after its persistent state
+is checked.
+
+```bash
+getenforce
+docker info --format '{{json .SecurityOptions}}'
+docker inspect --format '{{.ProcessLabel}}' gitlab
+```
+
+Do not continue on an SELinux-enabled host until Docker confinement works and
+the installed container policy provides the dedicated log-reader type used by
+the Suricata collector. The playbooks verify this prerequisite but do not
+reconfigure or restart the shared Docker daemon.
+
 Zeek records must be newline-delimited JSON. Inspect one complete line instead
 of assuming a `.log` suffix implies the required format. Confirm
 `vm.max_map_count` can be changed by the Ansible account's intended privilege
@@ -104,6 +122,13 @@ bash validation/validate.sh runtime --send-samples
 Also generate fresh network traffic and record one new Zeek and one new
 Suricata document. A fixture already present from an earlier run is not proof
 that the current collector path works.
+
+Sensor evidence must also show that the Zeek collector has read-only access to
+both the canonical stable root and any external canonical active target, the
+Suricata collector runs as `container_logreader_t` when SELinux is active, the
+native EVE file retains its host log label, and each collector can byte-read a
+real nonempty source file. Native sensor mounts must report `RW=false` without
+`z` or `Z` mode tokens.
 
 Manual observations should include:
 

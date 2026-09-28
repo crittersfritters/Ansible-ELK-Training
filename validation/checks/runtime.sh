@@ -118,6 +118,322 @@ check_containers() {
   done
 }
 
+check_docker_selinux_contract() {
+  section "Docker SELinux confinement"
+  if ! have_command getenforce; then
+    skip "getenforce is unavailable; Docker SELinux integration was not evaluated"
+    return
+  fi
+
+  local enforcement
+  enforcement=$(getenforce 2>/dev/null || true)
+  case "$enforcement" in
+    Enforcing|Permissive) ;;
+    Disabled)
+      skip "SELinux is disabled; SELinux-specific container checks do not apply"
+      return
+      ;;
+    *)
+      skip "SELinux state could not be determined; SELinux-specific checks were not run"
+      return
+      ;;
+  esac
+
+  set_docker_command
+  if ! have_command "${DOCKER_PARTS[0]}" || ! have_command python3; then
+    skip "Docker and Python 3 are required for SELinux container checks"
+    return
+  fi
+
+  local security_options output
+  if ! security_options=$("${DOCKER_PARTS[@]}" info \
+    --format '{{json .SecurityOptions}}' 2>&1); then
+    fail "Docker security options could not be inspected"
+    show_command_failure "$security_options"
+    return
+  fi
+  if output=$(python3 - 3<<< "$security_options" <<'PY'
+import json
+import os
+
+with os.fdopen(3) as stream:
+    options = json.load(stream)
+if "name=selinux" not in options:
+    raise SystemExit(f"security options={options!r}")
+PY
+  ); then
+    pass "Docker reports SELinux integration while the host is $enforcement"
+  else
+    fail "Docker does not report name=selinux while host SELinux is $enforcement"
+    show_command_failure "$output"
+  fi
+
+  local container label process_type expected_type
+  for container in $HEALTHY_CONTAINERS $RUNNING_CONTAINERS $COMPLETED_CONTAINERS; do
+    if ! label=$("${DOCKER_PARTS[@]}" inspect \
+      --format '{{.ProcessLabel}}' "$container" 2>&1); then
+      fail "Container process label could not be inspected: $container"
+      show_command_failure "$label"
+      continue
+    fi
+    process_type=$(cut -d: -f3 <<< "$label")
+    expected_type=container_t
+    if [[ "$container" == "$SURICATA_FILEBEAT_CONTAINER" ]]; then
+      expected_type=container_logreader_t
+    fi
+    if [[ "$process_type" == "$expected_type" ]]; then
+      pass "Container $container runs as SELinux type $expected_type"
+    else
+      fail "Container $container runs as SELinux type ${process_type:-<empty>}; expected $expected_type"
+    fi
+  done
+}
+
+check_sensor_collector_contract() {
+  section "Sensor collector mount and label contract"
+  set_docker_command
+  if ! have_command "${DOCKER_PARTS[0]}" || ! have_command python3; then
+    skip "Docker and Python 3 are required for sensor collector checks"
+    return
+  fi
+
+  local zeek_root zeek_active suricata_root suricata_event
+  local resolved_path metadata output selinux_enabled=0
+  if ! zeek_root=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{index .Config.Labels "org.mini-manticore.zeek.logs-root"}}' \
+    "$ZEEK_FILEBEAT_CONTAINER" 2>&1); then
+    fail "The Zeek collector canonical-root label could not be inspected"
+    show_command_failure "$zeek_root"
+    return
+  fi
+  if ! zeek_active=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{index .Config.Labels "org.mini-manticore.zeek.logs-active"}}' \
+    "$ZEEK_FILEBEAT_CONTAINER" 2>&1); then
+    fail "The Zeek collector canonical-active label could not be inspected"
+    show_command_failure "$zeek_active"
+    return
+  fi
+  if ! suricata_root=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{index .Config.Labels "org.mini-manticore.suricata.logs-root"}}' \
+    "$SURICATA_FILEBEAT_CONTAINER" 2>&1); then
+    fail "The Suricata collector log-root label could not be inspected"
+    show_command_failure "$suricata_root"
+    return
+  fi
+  if ! suricata_event=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{index .Config.Labels "org.mini-manticore.suricata.events"}}' \
+    "$SURICATA_FILEBEAT_CONTAINER" 2>&1); then
+    fail "The Suricata collector event-path label could not be inspected"
+    show_command_failure "$suricata_event"
+    return
+  fi
+  for resolved_path in "$zeek_root" "$zeek_active"; do
+    if [[ -z "$resolved_path" || "$resolved_path" == '<no value>' ]]; then
+      fail "The Zeek collector does not publish its canonical source paths"
+      return
+    fi
+    if ! output=$("${DOCKER_PARTS[@]}" exec "$ZEEK_FILEBEAT_CONTAINER" \
+      readlink --canonicalize-existing -- "$resolved_path" 2>&1); then
+      fail "The Zeek collector cannot resolve canonical path $resolved_path"
+      show_command_failure "$output"
+      return
+    fi
+    if [[ "$output" != "$resolved_path" ]]; then
+      fail "The Zeek collector path $resolved_path resolves to unexpected path $output"
+      return
+    fi
+  done
+  if [[ -z "$suricata_root" || "$suricata_root" == '<no value>' || \
+        -z "$suricata_event" || "$suricata_event" == '<no value>' ]]; then
+    fail "The Suricata collector does not publish its native source paths"
+    return
+  fi
+  if ! metadata=$("${DOCKER_PARTS[@]}" inspect \
+    "$ZEEK_FILEBEAT_CONTAINER" "$SURICATA_FILEBEAT_CONTAINER" 2>&1); then
+    fail "Sensor collector metadata could not be inspected"
+    show_command_failure "$metadata"
+    return
+  fi
+
+  if have_command getenforce; then
+    case "$(getenforce 2>/dev/null || true)" in
+      Enforcing|Permissive) selinux_enabled=1 ;;
+    esac
+  fi
+
+  local suricata_context=""
+  if (( selinux_enabled == 1 )); then
+    if ! suricata_context=$("${DOCKER_PARTS[@]}" exec \
+      "$SURICATA_FILEBEAT_CONTAINER" \
+      stat -Lc '%C' "$suricata_event" 2>&1); then
+      fail "The Suricata collector cannot inspect the native EVE label"
+      show_command_failure "$suricata_context"
+      return
+    fi
+  fi
+
+  if output=$(python3 - \
+    "$ZEEK_FILEBEAT_CONTAINER" \
+    "$SURICATA_FILEBEAT_CONTAINER" \
+    "$zeek_root" \
+    "$zeek_active" \
+    "$suricata_root" \
+    "$suricata_event" \
+    "$selinux_enabled" \
+    "$suricata_context" \
+    "$SURICATA_NATIVE_SELINUX_TYPE" \
+    3<<< "$metadata" <<'PY'
+import json
+import os
+import posixpath
+import sys
+
+(
+    zeek_name,
+    suricata_name,
+    zeek_root,
+    zeek_active,
+    suricata_root,
+    suricata_event,
+    selinux_enabled_text,
+    suricata_context,
+    expected_native_type,
+) = sys.argv[1:]
+selinux_enabled = selinux_enabled_text == "1"
+
+with os.fdopen(3) as stream:
+    documents = json.load(stream)
+containers = {
+    document.get("Name", "").lstrip("/"): document
+    for document in documents
+}
+problems = []
+
+expected_labels = {
+    zeek_name: {
+        "org.mini-manticore.sensor": "zeek",
+        "org.mini-manticore.zeek.logs-root": zeek_root,
+        "org.mini-manticore.zeek.logs-active": zeek_active,
+    },
+    suricata_name: {
+        "org.mini-manticore.sensor": "suricata",
+        "org.mini-manticore.suricata.logs-root": suricata_root,
+        "org.mini-manticore.suricata.events": suricata_event,
+    },
+}
+
+for container_name, expected in expected_labels.items():
+    actual = containers[container_name].get("Config", {}).get("Labels") or {}
+    for name, value in expected.items():
+        if actual.get(name) != value:
+            problems.append(
+                f"{container_name}: label {name!r} does not equal {value!r}"
+            )
+
+for name, path in (
+    ("Zeek root", zeek_root),
+    ("Zeek active directory", zeek_active),
+    ("Suricata root", suricata_root),
+    ("Suricata event", suricata_event),
+):
+    if not posixpath.isabs(path) or path == "/":
+        problems.append(f"{name} is not a safe absolute path: {path!r}")
+
+def process_type(label):
+    fields = str(label).strip().split(":")
+    return fields[2] if len(fields) >= 3 else ""
+
+def require_mount(container_name, source, destination, expected_rw):
+    mounts = [
+        mount
+        for mount in containers[container_name].get("Mounts", [])
+        if mount.get("Destination") == destination
+    ]
+    if len(mounts) != 1:
+        problems.append(
+            f"{container_name}: expected one mount at {destination!r}, got {len(mounts)}"
+        )
+        return
+    mount = mounts[0]
+    mode_tokens = {
+        token.strip()
+        for token in str(mount.get("Mode", "")).split(",")
+        if token.strip()
+    }
+    if mount.get("Type") != "bind":
+        problems.append(f"{container_name}:{destination} is not a bind mount")
+    if mount.get("Source") != source:
+        problems.append(
+            f"{container_name}:{destination} source={mount.get('Source')!r}, expected {source!r}"
+        )
+    if mount.get("RW") is not expected_rw:
+        problems.append(
+            f"{container_name}:{destination} RW={mount.get('RW')!r}, expected {expected_rw!r}"
+        )
+    if {"z", "Z"} & mode_tokens:
+        problems.append(
+            f"{container_name}:{destination} must not relabel native sensor files"
+        )
+
+require_mount(zeek_name, zeek_root, zeek_root, False)
+try:
+    active_is_external = posixpath.commonpath([zeek_root, zeek_active]) != zeek_root
+except ValueError:
+    active_is_external = True
+if active_is_external:
+    require_mount(zeek_name, zeek_active, zeek_active, False)
+
+require_mount(suricata_name, suricata_root, suricata_root, False)
+try:
+    if posixpath.commonpath([suricata_root, suricata_event]) != suricata_root:
+        problems.append("Suricata event path is outside its mounted log root")
+except ValueError:
+    problems.append("Suricata event path is outside its mounted log root")
+
+if selinux_enabled:
+    security_options = (
+        containers[suricata_name].get("HostConfig", {}).get("SecurityOpt") or []
+    )
+    if "label=type:container_logreader_t" not in security_options:
+        problems.append(
+            "Suricata collector lacks label=type:container_logreader_t"
+        )
+    if process_type(containers[zeek_name].get("ProcessLabel")) != "container_t":
+        problems.append("Zeek collector does not run as container_t")
+    if (
+        process_type(containers[suricata_name].get("ProcessLabel"))
+        != "container_logreader_t"
+    ):
+        problems.append(
+            "Suricata collector does not run as container_logreader_t"
+        )
+    actual_native_type = process_type(suricata_context)
+    if actual_native_type != expected_native_type:
+        problems.append(
+            f"Suricata EVE type={actual_native_type!r}, expected {expected_native_type!r}"
+        )
+    if actual_native_type == "container_file_t":
+        problems.append("Suricata EVE was relabeled as container-owned data")
+
+if problems:
+    print("\n".join(problems))
+    raise SystemExit(1)
+
+print(f"zeek_root={zeek_root}")
+print(f"zeek_active={zeek_active}")
+print(f"zeek_active_external={active_is_external}")
+if selinux_enabled:
+    print(f"suricata_native_type={process_type(suricata_context)}")
+PY
+  ); then
+    pass "Sensor sources use the required read-only, non-relabeling mounts and process types"
+    note "$output"
+  else
+    fail "Sensor collector mount or label contract is incorrect"
+    show_command_failure "$output"
+  fi
+}
+
 check_gitlab_bindings() {
   section "GitLab runtime contract"
   set_docker_command
@@ -363,6 +679,18 @@ PY
   check_http_endpoint "Port-router Logstash pipeline $PORT_ROUTER_PIPELINE_ID" "$PORT_ROUTER_URL/_node/pipelines/$PORT_ROUTER_PIPELINE_ID"
 }
 
+is_expected_loopback_listener() {
+  local address="$1" port="$2"
+  case "$address" in
+    127.0.0.1:"$port"|\[::1\]:"$port"|\[::ffff:127.0.0.1\]:"$port")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 check_loopback_bindings() {
   section "Loopback-only listener policy"
   if ! have_command ss; then
@@ -382,10 +710,11 @@ check_loopback_bindings() {
     while IFS= read -r address; do
       [[ -n "$address" ]] || continue
       found=1
-      case "$address" in
-        127.0.0.1:"$port"|\[::1\]:"$port") ;;
-        *) bad=1 ;;
-      esac
+      # Java commonly exposes an IPv4 loopback bind through its
+      # IPv4-mapped IPv6 representation on dual-stack Linux hosts.
+      if ! is_expected_loopback_listener "$address" "$port"; then
+        bad=1
+      fi
     done <<< "$output"
     if (( found == 1 && bad == 0 )); then
       pass "TCP/$port listens only on loopback"
@@ -397,18 +726,72 @@ check_loopback_bindings() {
 
 check_sensor_logs() {
   section "Sensor source logs"
-  if [[ -d "$ZEEK_LOG_PATH" ]] && find "$ZEEK_LOG_PATH" -maxdepth 1 -type f -size +0c -print -quit 2>/dev/null | grep -q .; then
-    pass "Zeek has at least one nonempty current log under $ZEEK_LOG_PATH"
-  elif [[ -f "$ZEEK_LOG_PATH" && -s "$ZEEK_LOG_PATH" ]]; then
-    pass "Zeek source log is nonempty: $ZEEK_LOG_PATH"
-  else
-    fail "No nonempty Zeek source log is visible at $ZEEK_LOG_PATH"
+  set_docker_command
+  if ! have_command "${DOCKER_PARTS[0]}"; then
+    skip "Docker is unavailable; collector-visible sensor logs were not checked"
+    return
   fi
 
-  if [[ -f "$SURICATA_LOG_PATH" && -s "$SURICATA_LOG_PATH" ]]; then
-    pass "Suricata source log is nonempty: $SURICATA_LOG_PATH"
+  local zeek_active suricata_event output
+  if ! zeek_active=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{index .Config.Labels "org.mini-manticore.zeek.logs-active"}}' \
+    "$ZEEK_FILEBEAT_CONTAINER" 2>&1); then
+    fail "The Zeek collector active-source label could not be inspected"
+    show_command_failure "$zeek_active"
+    return
+  fi
+  if ! suricata_event=$("${DOCKER_PARTS[@]}" inspect \
+    --format '{{index .Config.Labels "org.mini-manticore.suricata.events"}}' \
+    "$SURICATA_FILEBEAT_CONTAINER" 2>&1); then
+    fail "The Suricata collector event-source label could not be inspected"
+    show_command_failure "$suricata_event"
+    return
+  fi
+  if [[ -z "$zeek_active" || "$zeek_active" == '<no value>' || \
+        -z "$suricata_event" || "$suricata_event" == '<no value>' ]]; then
+    fail "Sensor collectors do not publish their effective source paths"
+    return
+  fi
+
+  if output=$("${DOCKER_PARTS[@]}" exec "$ZEEK_FILEBEAT_CONTAINER" \
+    /bin/sh -ec '
+      set -eu
+      active=$(readlink --canonicalize-existing -- "$1")
+      case "$active" in
+        /*) ;;
+        *) exit 1 ;;
+      esac
+      test "$active" != "/"
+      found=0
+      for log_path in "$active"/*.log; do
+        test -f "$log_path" || continue
+        test -s "$log_path" || continue
+        head -c 1 "$log_path" >/dev/null
+        found=$((found + 1))
+      done
+      test "$found" -gt 0
+      printf "canonical_active=%s readable_nonempty_logs=%s\n" "$active" "$found"
+    ' sh "$zeek_active" 2>&1); then
+    pass "Zeek collector can byte-read nonempty files from the canonical active directory"
+    note "$output"
   else
-    fail "No nonempty Suricata source log is visible at $SURICATA_LOG_PATH"
+    fail "Zeek collector cannot byte-read a nonempty active log"
+    show_command_failure "$output"
+  fi
+
+  if output=$("${DOCKER_PARTS[@]}" exec "$SURICATA_FILEBEAT_CONTAINER" \
+    /bin/sh -ec '
+      set -eu
+      test -f "$1"
+      test -s "$1"
+      head -c 1 "$1" >/dev/null
+      printf "readable_event=%s\n" "$1"
+    ' sh "$suricata_event" 2>&1); then
+    pass "Suricata collector can byte-read the nonempty EVE source"
+    note "$output"
+  else
+    fail "Suricata collector cannot byte-read the EVE source"
+    show_command_failure "$output"
   fi
 }
 
@@ -720,10 +1103,23 @@ run_native_config_tests() {
 
   for container in $FILEBEAT_CONTAINERS; do
     if output=$("${DOCKER_PARTS[@]}" exec "$container" \
-      filebeat test config -c /usr/share/filebeat/filebeat.yml 2>&1); then
-      pass "Filebeat accepts mounted configuration in $container"
+      /bin/sh -ec '
+        set -eu
+        test_data=$(mktemp -d /tmp/mini-manticore-filebeat-test.XXXXXX)
+        cleanup() {
+          rm -rf -- "$test_data"
+        }
+        trap cleanup EXIT HUP INT TERM
+        filebeat test config \
+          -c /usr/share/filebeat/filebeat.yml \
+          --path.data "$test_data"
+        filebeat test output \
+          -c /usr/share/filebeat/filebeat.yml \
+          --path.data "$test_data"
+      ' 2>&1); then
+      pass "Filebeat accepts its configuration and reaches its output in $container"
     else
-      fail "Filebeat rejects mounted configuration in $container"
+      fail "Filebeat configuration or output test fails in $container"
       show_command_failure "$output"
     fi
   done
@@ -927,6 +1323,8 @@ run_runtime_checks() {
   check_host_aliases
   check_deployed_compose
   check_containers
+  check_docker_selinux_contract
+  check_sensor_collector_contract
   check_gitlab_bindings
   check_service_endpoints
   check_loopback_bindings

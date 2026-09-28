@@ -50,13 +50,20 @@ The runtime suite checks, without changing the running stack:
 - rendered Compose files under `/var/docker`;
 - required healthy/running containers and the successful one-shot topic
   initializer;
+- Docker SELinux integration and effective container process types whenever
+  host SELinux is enabled;
 - Elasticsearch, available Kibana, Kafka UI, the GitLab sign-in page, and both
   Logstash API endpoints;
 - GitLab's Docker-reported health, pinned image, Compose ownership, persistent
   mounts, Omnibus settings, and exact HTTP, port 443, and SSH loopback
   publications;
 - loopback-only listeners for the host-networked Mini-Manticore ports;
-- Zeek and Suricata source logs;
+- canonical Zeek source resolution, conditional external-target coverage,
+  and read-only non-relabeling sensor mounts;
+- the Suricata log-reader domain and preserved native EVE label on SELinux
+  hosts;
+- byte-level access to real nonempty Zeek and Suricata source files from the
+  running collectors;
 - required Kafka topics;
 - Elasticsearch backing-index mappings, write aliases, and applicable
   composable index templates;
@@ -80,10 +87,11 @@ bash ./validation/validate.sh runtime --config-tests
 ```
 
 Logstash receives a unique temporary `path.data` inside its existing container
-so the validation process does not contend with the running instance. Filebeat
-uses its native `test config` operation. These commands do not stop or restart
-containers. They can leave validation-only temporary files inside the
-containers, which are harmless and are not removed by the harness.
+so the validation process does not contend with the running instance. Each
+Filebeat receives its own temporary `path.data` and runs both `test config`
+and `test output`, proving configuration parsing and Kafka connectivity without
+contending with the active registry. The Filebeat temporary directories are
+removed after each check. These commands do not stop or restart containers.
 
 If the containers are not running, use the image's native commands manually
 after rendering the configuration:
