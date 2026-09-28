@@ -25,6 +25,12 @@ the annotated answer checkpoint tags.
 
 Docker is a prerequisite. The playbooks intentionally do not install,
 reconfigure, restart, or prune Docker because the same daemon owns GitLab.
+When the host enforces SELinux, Docker must participate in that confinement
+before GitLab or the managed stack is created. Configure that shared daemon
+through the selected platform's current guidance and verify a container's
+effective process label; host enforcement alone does not prove container
+confinement. The [GitLab bootstrap guide](bootstrap/gitlab/README.md) defines
+the shared-daemon prerequisite and controlled migration procedure.
 
 ## Reference baseline
 
@@ -71,6 +77,13 @@ application listeners are restricted to loopback.
    ${EDITOR:-vi} group_vars/all/vault.yml
    ```
 
+   Once this file contains a secret, do not diagnose inventory with
+   `ansible-inventory --host`, `ansible-inventory --list`, or
+   `ansible-inventory --graph --vars`. Those forms serialize resolved host
+   variables and can expose the plaintext value. Use `ansible-inventory
+   --graph` without `--vars` and narrowly targeted Ansible debug expressions
+   that name only non-secret fields.
+
 6. Verify the boundary, then deploy:
 
    ```bash
@@ -88,14 +101,31 @@ collectors in dependency order. It does not own the GitLab project.
 After a plaintext local run works, encrypt the entire ignored variable file:
 
 ```bash
-ansible-vault encrypt group_vars/all/vault.yml
-git add -f group_vars/all/vault.yml
+(
+  set -euo pipefail
+  set +x
+  ansible-vault encrypt group_vars/all/vault.yml
+  vault_header=
+  IFS= read -r vault_header < group_vars/all/vault.yml || true
+  if [[ "$vault_header" == '$ANSIBLE_VAULT;'* ]]; then
+    git add -f -- group_vars/all/vault.yml
+  else
+    printf '%s\n' 'Refusing to stage a non-Vault credential file.' >&2
+    exit 1
+  fi
+)
 ```
 
 Set `ANSIBLE_VAULT_PASSWORD` as a masked, protected GitLab CI/CD variable. The
 checked-in `vault_password.sh` returns that environment value to Ansible. The
 answer pipeline refuses a missing or plaintext Vault file and deploys only from
 a protected ref on the `mini-manticore-local` runner.
+
+Never execute `vault_password.sh` directly or trace it with `bash -x`,
+`set -x`, or GitLab `CI_DEBUG_TRACE`; its stdout is the secret. Do not place
+`ANSIBLE_VAULT_PASSWORD` in `/etc/environment`. Follow the
+[identity and Vault guide](docs/identity-and-vault.md) for secret-silent
+correct-password and wrong-password tests before enabling CI.
 
 ## Validation
 

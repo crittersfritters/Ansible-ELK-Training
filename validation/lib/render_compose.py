@@ -75,6 +75,10 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     common = {"playbook_dir": "/tmp/mini-manticore-reference"}
     for path in sorted((root / "group_vars" / "all").glob("*.yml")):
+        # Compose rendering never needs secret variables. Do not open the
+        # credential file even during the initial ignored-plaintext phase.
+        if path.name == "vault.yml":
+            continue
         if path.read_text(encoding="utf-8").startswith("$ANSIBLE_VAULT;"):
             continue
         common.update(load_yaml_mapping(path))

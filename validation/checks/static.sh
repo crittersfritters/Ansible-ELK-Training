@@ -32,11 +32,20 @@ check_yaml_syntax() {
   local file output found=0
   while IFS= read -r -d '' file; do
     found=1
+    if [[ "${file#"$PROJECT_ROOT/"}" == "group_vars/all/vault.yml" ]]; then
+      if IFS= read -r first_line < "$file" \
+        && [[ "$first_line" == '$ANSIBLE_VAULT;'* ]]; then
+        pass "Ansible Vault payload detected: ${file#"$PROJECT_ROOT/"}"
+      else
+        skip "Secret-bearing plaintext YAML is left to secret-silent Ansible validation: ${file#"$PROJECT_ROOT/"}"
+      fi
+      continue
+    fi
     if IFS= read -r first_line < "$file" && [[ "$first_line" == '$ANSIBLE_VAULT;'* ]]; then
       pass "Ansible Vault payload detected: ${file#"$PROJECT_ROOT/"}"
       continue
     fi
-    if output=$(python3 - "$file" <<'PY'
+    if output=$(python3 - "$file" 2>&1 <<'PY'
 import pathlib
 import sys
 import yaml
@@ -355,48 +364,28 @@ check_ansible_inventory() {
     return
   fi
 
-  local inventory_json output
-  if ! inventory_json=$(ansible-inventory -i "$inventory" --list); then
-    fail "Ansible could not parse $INVENTORY_FILE"
-    show_command_failure "$inventory_json"
-    return
-  fi
-  pass "Ansible parses $INVENTORY_FILE"
+  local -a inventory_groups
+  local output
+  read -r -a inventory_groups <<< "$INVENTORY_GROUPS"
 
-  if output=$(python3 - "$INVENTORY_HOST" $INVENTORY_GROUPS 3<<< "$inventory_json" <<'PY'
-import json
-import os
-import sys
+  if output=$(
+    set -o pipefail
 
-expected_host = sys.argv[1]
-groups = sys.argv[2:]
-with os.fdopen(3) as stream:
-    data = json.load(stream)
-problems = []
-for group in groups:
-    hosts = data.get(group, {}).get("hosts", [])
-    if hosts != [expected_host]:
-        problems.append(f"{group}: expected only {expected_host!r}, got {hosts!r}")
-hostvars = data.get("_meta", {}).get("hostvars", {})
-if expected_host not in hostvars:
-    problems.append(f"{expected_host!r} is absent from _meta.hostvars")
-else:
-    variables = hostvars[expected_host]
-    if variables.get("ansible_connection") != "ssh":
-        problems.append("ansible_connection must be ssh")
-    if variables.get("ansible_user") != "ansible":
-        problems.append("ansible_user must be ansible")
-    if "ansible_host" in variables:
-        problems.append("ansible_host must be absent so mini-manticore.local is resolved normally")
-if problems:
-    print("\n".join(problems))
-    raise SystemExit(1)
-PY
+    ansible-inventory \
+      -i "$inventory" \
+      --list \
+      2>/dev/null |
+      python3 \
+        "$VALIDATION_DIR/lib/check_inventory.py" \
+        "$INVENTORY_HOST" \
+        "${inventory_groups[@]}"
   ); then
+    pass "Ansible parses $INVENTORY_FILE"
     pass "The host-preparation group and all six service groups contain only $INVENTORY_HOST"
   else
-    fail "Inventory does not implement the one-host localhost model"
+    fail "Inventory parsing or the one-host localhost contract failed"
     show_command_failure "$output"
+    note "Use ansible-inventory --graph without --vars for secret-safe diagnosis."
   fi
 }
 
@@ -413,13 +402,16 @@ check_ansible_syntax() {
     return
   fi
 
-  local output
-  if output=$(cd "$PROJECT_ROOT" && \
-    ANSIBLE_NOCOWS=1 ansible-playbook -i "$inventory" --syntax-check "$playbook" 2>&1); then
+  if (cd "$PROJECT_ROOT" && \
+    ANSIBLE_NOCOWS=1 ansible-playbook \
+      -i "$inventory" \
+      --syntax-check \
+      "$playbook" \
+      >/dev/null 2>&1); then
     pass "Ansible syntax-check passes for $MAIN_PLAYBOOK"
   else
     fail "Ansible syntax-check fails for $MAIN_PLAYBOOK"
-    show_command_failure "$output"
+    note "Raw Ansible diagnostics are suppressed because resolved variables may contain secrets."
   fi
 }
 
@@ -431,6 +423,7 @@ check_configuration_assets() {
   local suricata_filebeat="$PROJECT_ROOT/roles/filebeat_suricata/templates/filebeat.yml.j2"
   local ci_file="$PROJECT_ROOT/.gitlab-ci.yml"
   local child_ci_file="$PROJECT_ROOT/.gitlab/deploy.yml"
+  local vault_password_client="$PROJECT_ROOT/vault_password.sh"
 
   if [[ -s "$port_router" ]] && grep -q 'grok[[:space:]]*{' "$port_router"; then
     pass "Port-router configuration contains Grok parsing"
@@ -475,6 +468,25 @@ check_configuration_assets() {
     pass "GitLab deployment requires the intended runner and protected refs"
   else
     fail "GitLab deployment runner or protected-ref guard is missing"
+  fi
+  if have_command python3 && python3 -c 'import yaml' >/dev/null 2>&1; then
+    local ci_contract_output
+    if ci_contract_output=$(python3 \
+      "$VALIDATION_DIR/lib/check_ci_contract.py" \
+      "$ci_file" \
+      "$child_ci_file" 2>&1); then
+      pass "CI verifies Vault input and maps the Docker SELinux contract to its three callers"
+    else
+      fail "CI Vault verification or Docker SELinux change mapping is incorrect"
+      show_command_failure "$ci_contract_output"
+    fi
+  else
+    skip "Python 3 with PyYAML is unavailable; CI semantics were not evaluated"
+  fi
+  if [[ -x "$vault_password_client" ]]; then
+    pass "The Vault password client is executable"
+  else
+    fail "vault_password.sh is missing or is not executable"
   fi
   if grep -Eq '^[[:space:]]*host_key_checking[[:space:]]*=[[:space:]]*[Ff]alse' \
     "$PROJECT_ROOT/ansible.cfg"; then

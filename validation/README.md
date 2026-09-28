@@ -37,7 +37,8 @@ The static suite checks:
 - concrete Compose files with `docker compose config` when any exist;
 - the GitLab bootstrap's exact pinned image, identity, Omnibus settings,
   loopback publications, and persistent mounts;
-- Ansible inventory structure and playbook syntax when Ansible is available;
+- secret-silent Ansible inventory structure and playbook syntax when Ansible is
+  available;
 - the localhost inventory model: one host in all six service groups;
 - the presence of Logstash, Filebeat, all four mission samples, and CI
   configuration;
@@ -75,6 +76,19 @@ The runtime suite checks, without changing the running stack:
 All names and endpoints are centralized in `contract.env`. Environment
 variables override its defaults, so local differences do not require editing
 the check scripts.
+
+Static inventory validation treats resolved inventory as secret-bearing data.
+`ansible-inventory --list` streams directly into
+`validation/lib/check_inventory.py`; the JSON is not stored in a shell
+variable, written to a file, displayed, or passed through `tee`. The sanitizer
+reports only fixed contract results and generic failures. Do not replace it
+with raw `ansible-inventory --list`, `ansible-inventory --host`, or
+`ansible-inventory --graph --vars` output after Vault variables are present.
+Plain `ansible-inventory --graph` remains the safe structural diagnostic.
+The offline Compose and sensor-template renderers do not open
+`group_vars/all/vault.yml`; none of their inputs require credentials. The
+generic YAML parser also leaves an ignored plaintext Vault working file to the
+secret-silent Ansible checks, rather than risking a parser source excerpt.
 
 ## Logstash and Filebeat configuration tests
 
@@ -169,3 +183,9 @@ stop/restart/remove operations, Kafka topic mutations, or Ansible deployment
 calls. Static validation removes only its own newly created temporary render
 directory. HTTP `POST` is used only for Elasticsearch search bodies;
 Elasticsearch searches do not mutate cluster state.
+
+Validation never deliberately displays decrypted Vault content. Do not run or
+trace `vault_password.sh` directly, enable shell xtrace, or enable GitLab
+`CI_DEBUG_TRACE` while a Vault password is present. CI jobs that evaluate
+inventory or Ansible syntax must prepare the password client and the pinned
+collections first, then keep all decryption-test output suppressed.

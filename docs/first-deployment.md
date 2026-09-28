@@ -28,7 +28,9 @@ security options before deploying anything under `/var/docker`. Inspect the
 already-bootstrapped GitLab container as well: an empty process label or
 `spc_t` means the container predates working Docker SELinux integration and
 must be recreated from its owning Compose project after its persistent state
-is checked.
+is checked. Follow the controlled migration in the
+[GitLab bootstrap guide](../bootstrap/gitlab/README.md) rather than changing
+the shared daemon during an Ansible run.
 
 ```bash
 getenforce
@@ -64,14 +66,27 @@ uses its own default-protected key and verified `known_hosts` entry.
 
 ```bash
 ansible-inventory --graph
-ansible-inventory --host mini-manticore.local
+ansible mini_manticore_hosts -m ansible.builtin.debug \
+  -a var=ansible_connection
+ansible mini_manticore_hosts -m ansible.builtin.debug \
+  -a var=ansible_user
+ansible mini_manticore_hosts -m ansible.builtin.debug \
+  -a var=ansible_port
 ansible mini_manticore_hosts -m ping
 ansible mini_manticore_hosts -b -m command -a 'id -u'
 ```
 
-The resolved inventory must show one host in `mini_manticore_hosts` and all six
-service groups, `ansible_connection=ssh`, and `ansible_user=ansible`. It must
-not replace the inventory hostname with `127.0.0.1` through `ansible_host`.
+The graph must show one host in `mini_manticore_hosts` and all six service
+groups. The targeted debug commands must report `ansible_connection=ssh`,
+`ansible_user=ansible`, and `ansible_port=22`. The static validator confirms
+that the inventory does not replace its hostname with `127.0.0.1` through
+`ansible_host`.
+
+Do not use `ansible-inventory --host`, `ansible-inventory --list`, or
+`ansible-inventory --graph --vars` after secret variables exist. Those forms
+can render decrypted host variables, including the become credential, to the
+terminal or a CI job log. Plain `--graph` and targeted checks of known
+non-secret variables provide the required evidence without dumping hostvars.
 
 ## 3. Run static checks before mutation
 
@@ -81,6 +96,14 @@ bash validation/validate.sh static
 
 Resolve failures. A `SKIP` for an unavailable Docker or Ansible executable
 means that check was not performed; it is not passing evidence.
+
+On Fedora, PAM or systemd may append an OSC 3008 terminal-context marker while
+Ansible performs privilege escalation. Ansible can then warn that a module
+invocation had junk after its JSON data. Treat that warning as cosmetic only
+when the affected task reports success, the play recap reports `failed=0`, and
+the task's documented postcondition passes. Do not weaken the sudo or PAM
+policy, or disable fingerprint authentication, merely to suppress the warning.
+A failed task or unrelated trailing output still requires investigation.
 
 ## 4. Deploy in the reference order
 
@@ -165,8 +188,19 @@ Only after the plaintext variable flow works, encrypt and deliberately track
 the Vault file:
 
 ```bash
-ansible-vault encrypt group_vars/all/vault.yml
-git add -f group_vars/all/vault.yml
+(
+  set -euo pipefail
+  set +x
+  ansible-vault encrypt group_vars/all/vault.yml
+  vault_header=
+  IFS= read -r vault_header < group_vars/all/vault.yml || true
+  if [[ "$vault_header" == '$ANSIBLE_VAULT;'* ]]; then
+    git add -f -- group_vars/all/vault.yml
+  else
+    printf '%s\n' 'Refusing to stage a non-Vault credential file.' >&2
+    exit 1
+  fi
+)
 ```
 
 Test one correct and one incorrect Vault password. Configure the protected

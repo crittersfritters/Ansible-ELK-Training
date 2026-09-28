@@ -1,8 +1,8 @@
 # Mini-Manticore Training maintainer release guide
 
-The artifacts built in this workspace use release-candidate tags because the
-build host lacks Docker and Ansible. Do not promote them to final `v1.0` tags
-until every target-host gate below has been recorded.
+Use release-candidate tags while any target-host or GitLab gate remains
+unrecorded. Do not promote the course to final `v1.0` tags until every
+applicable gate below has passed against the intended release commits.
 
 ## Repository roles
 
@@ -144,7 +144,8 @@ deferred runtime gate is listed in its manifest.
 - All YAML and structured configuration parses.
 - All seven Compose projects render without unresolved variables.
 - The GitLab Compose project renders independently.
-- Ansible inventory contains one host in every intended group.
+- Secret-silent inventory validation confirms one host in every intended
+  group without logging or saving resolved host variables.
 - Ansible playbooks pass syntax checks.
 - Required roles and collections resolve at pinned versions.
 - Logstash and Filebeat configurations pass their native configuration tests.
@@ -176,13 +177,20 @@ deferred runtime gate is listed in its manifest.
   manual restart.
 - The deployment never removes, recreates, or changes the GitLab Compose
   project.
-- Both correct and incorrect Vault passwords produce the expected result.
+- A correct Vault password permits a decryption check whose stdout and stderr
+  are discarded, while a deliberate incorrect password fails the same
+  secret-silent check.
 
 ### GitLab answer validation
 
 - A non-mutating preflight uses the expected shell runner.
 - The runner reaches `ansible@mini-manticore.local` through SSH.
 - Dependency installation is reproducible from the pinned manifest.
+- Every job that evaluates Ansible inventory or syntax prepares the encrypted
+  Vault password client and pinned collections before validation.
+- Parent validation never logs or saves decrypted Vault content or raw
+  resolved inventory, and an incorrect Vault password fails before inventory
+  evaluation with a generic diagnostic.
 - The changed-path acceptance cases in the answer CI document select the
   expected jobs and order.
 - Selected failures stop later stages and remain visible.
@@ -224,7 +232,8 @@ solution did not leak.
 1. Freeze the intended tips of `training` and `answer-sheet` in release merge
    requests.
 2. Record both commit IDs and the selected Mini-Manticore source revision.
-3. Complete all validation gates and retain the results with the release.
+3. Complete all validation gates and retain only secret-safe results with the
+   release; do not retain decrypted Vault output or resolved inventory JSON.
 4. Create the manual and Ansible checkpoint tags at their verified answer
    commits.
 5. Create the paired final tags at the two frozen branch tips.

@@ -32,6 +32,7 @@ workflow:
           - roles/common/tasks/deploy_compose.yml
           - roles/common/tasks/update_from_template.yml
           - roles/common/tasks/wait_for_container_health.yml
+          - roles/common/tasks/verify_docker_selinux.yml
           - roles/common/tasks/wait_for_elasticsearch.yml
           - roles/common/tasks/wait_for_kafka.yml
           - roles/elasticsearch/**/*
@@ -77,6 +78,43 @@ validateAnswerSheet:
   stage: validate
   tags:
     - mini-manticore-local
+  variables:
+    ANSIBLE_CONFIG: "$CI_PROJECT_DIR/ansible.cfg"
+    ANSIBLE_LOCAL_TEMP: "$CI_PROJECT_DIR/.ansible/tmp"
+  cache:
+    key:
+      files:
+        - requirements.yml
+    paths:
+      - .ansible/roles/
+      - .ansible/collections/
+    policy: pull-push
+  before_script:
+    - umask 0002
+    - mkdir -p .ansible/roles .ansible/collections .ansible/tmp
+    - |
+      if [ ! -s group_vars/all/vault.yml ]; then
+        echo "Create and encrypt group_vars/all/vault.yml before CI validation." >&2
+        exit 1
+      fi
+      vault_header=
+      IFS= read -r vault_header < group_vars/all/vault.yml || true
+      if [[ "$vault_header" != '$ANSIBLE_VAULT;'* ]]; then
+        echo "CI refuses a plaintext group_vars/all/vault.yml." >&2
+        exit 1
+      fi
+      unset vault_header
+      if [ -z "${ANSIBLE_VAULT_PASSWORD:-}" ]; then
+        echo "ANSIBLE_VAULT_PASSWORD is required for encrypted vault.yml." >&2
+        exit 1
+      fi
+      test -x "$CI_PROJECT_DIR/vault_password.sh"
+      export ANSIBLE_VAULT_PASSWORD_FILE="$CI_PROJECT_DIR/vault_password.sh"
+      if ! ansible-vault view group_vars/all/vault.yml >/dev/null 2>&1; then
+        echo "Ansible could not open the encrypted Vault file with the configured password." >&2
+        exit 1
+      fi
+    - ansible-galaxy collection install -r requirements.yml -p .ansible/collections
   script:
     - python3 -c 'import yaml'
     - bash validation/validate.sh static

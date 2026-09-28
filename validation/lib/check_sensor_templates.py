@@ -34,6 +34,10 @@ def main() -> int:
 
     common: dict = {"playbook_dir": "/tmp/mini-manticore-reference"}
     for path in sorted((root / "group_vars/all").glob("*.yml")):
+        # Sensor template checks do not consume credentials. Never read the
+        # ignored plaintext or encrypted Vault working file here.
+        if path.name == "vault.yml":
+            continue
         if path.read_text(encoding="utf-8").startswith("$ANSIBLE_VAULT;"):
             continue
         common.update(renderer.load_yaml_mapping(path))

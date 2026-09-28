@@ -140,7 +140,9 @@ course-specific choice.
 At the manual-Ansible transition, the reference begins with a local ignored
 plaintext `group_vars/all/vault.yml` so the learner can separate ordinary SSH
 or playbook failures from encryption failures. The file holds only values that
-must be secret, including the become credential if one is required.
+must be secret, including the become credential if one is required. Do not
+display, copy into a transcript, or otherwise log its plaintext content during
+the transition.
 
 Before enabling CI deployment:
 
@@ -148,11 +150,89 @@ Before enabling CI deployment:
 2. configure an executable Vault password client that emits the value of
    `ANSIBLE_VAULT_PASSWORD` without printing anything else;
 3. encrypt the complete Vault variable file;
-4. confirm its content is no longer readable as plaintext;
-5. test successful decryption and a deliberate wrong-password failure;
-6. add `ANSIBLE_VAULT_PASSWORD` as a masked GitLab CI/CD variable; and
-7. protect the variable if and only if every branch allowed to deploy is also
+4. confirm only the encrypted Vault header, without displaying the file;
+5. test successful decryption and a deliberate wrong-password failure with
+   both command streams discarded;
+6. add `ANSIBLE_VAULT_PASSWORD` as a normal GitLab CI/CD variable, not a File
+   variable, and mark it masked and protected; and
+7. confirm every branch allowed to use that protected variable is itself
    protected.
+
+Run the transition from a shell with command tracing disabled. Encrypt the
+working file in place, then inspect only its header:
+
+```bash
+(
+  set -euo pipefail
+  set +x
+  ansible-vault encrypt group_vars/all/vault.yml
+
+  vault_header=
+  IFS= read -r vault_header < group_vars/all/vault.yml || true
+  if [[ "$vault_header" == '$ANSIBLE_VAULT;'* ]]; then
+    printf '%s\n' 'Vault header check: PASS'
+  else
+    printf '%s\n' 'Vault header check: FAIL' >&2
+    exit 1
+  fi
+)
+```
+
+Do not use `cat`, `head`, `ansible-vault view` without redirection, or an
+inventory command that serializes resolved host variables to prove the
+transition. Once Ansible loads an encrypted variable file, commands such as
+`ansible-inventory --list`, `ansible-inventory --host`, and
+`ansible-inventory --graph --vars` can disclose decrypted values. Use the
+plain `ansible-inventory --graph` view or repository validation, which emits
+only the expected inventory contract.
+
+Verify the real password without exposing decrypted content. The prompt below
+does not echo input, and both output streams from the decryption operation are
+discarded:
+
+```bash
+(
+  set -euo pipefail
+  set +x
+  read -rsp 'Vault password: ' ANSIBLE_VAULT_PASSWORD
+  printf '\n'
+  export ANSIBLE_VAULT_PASSWORD
+  export ANSIBLE_VAULT_PASSWORD_FILE="$PWD/vault_password.sh"
+
+  if ansible-vault view group_vars/all/vault.yml >/dev/null 2>&1; then
+    printf '%s\n' 'Correct-password test: PASS'
+  else
+    printf '%s\n' 'Correct-password test: FAIL' >&2
+    exit 1
+  fi
+)
+```
+
+Then prove that a deliberately incorrect value is rejected, again without
+displaying either stream:
+
+```bash
+(
+  set -euo pipefail
+  set +x
+  if ANSIBLE_VAULT_PASSWORD='intentionally-wrong-course-test-value' \
+     ANSIBLE_VAULT_PASSWORD_FILE="$PWD/vault_password.sh" \
+     ansible-vault view group_vars/all/vault.yml >/dev/null 2>&1
+  then
+    printf '%s\n' 'Wrong-password test: FAIL' >&2
+    exit 1
+  else
+    printf '%s\n' 'Wrong-password test: PASS'
+  fi
+)
+```
+
+`vault_password.sh` is a password client, not a diagnostic command. Never run
+it directly, source it, or invoke it under `bash -x` or shell `set -x`; each of
+those actions can print the secret. Keep GitLab's `CI_DEBUG_TRACE` disabled for
+jobs that receive the Vault variable, and do not place the password or an
+`ANSIBLE_VAULT_PASSWORD` assignment in `/etc/environment`, a profile, or any
+tracked file.
 
 The pipeline checks the file header before requiring the CI variable. This
 allows the answer history to demonstrate both the plaintext teaching stage and
@@ -182,7 +262,7 @@ Run each check as the identity named in the first column.
 | `gitlab-runner` | Run `ansible-inventory --graph` from a checkout | One host appears in every required functional group. |
 | `gitlab-runner` | Run an Ansible ping module through the repository configuration | The SSH transport succeeds without prompting. |
 | GitLab job | Execute a non-mutating preflight job | The runner tag selects the expected shell runner. |
-| GitLab job | Read encrypted variables through an Ansible syntax or inventory operation | Correct Vault input succeeds without secret output. |
+| GitLab job | Run the secret-silent static preflight | Correct Vault input and pinned dependencies allow validation without resolved variables in the log. |
 
 Do not proceed to a mutating CI deployment until all non-mutating checks pass.
 

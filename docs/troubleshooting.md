@@ -8,6 +8,7 @@ topics, parsing, indexing, aliases, or data views.
 |---|---|
 | Ansible host unreachable | `/etc/hosts`, host SSH, account key, file modes, `known_hosts` |
 | SSH succeeds; become fails | `ansible` privilege policy and Vault value |
+| Ansible warns about junk after module JSON | Fedora PAM/systemd OSC 3008 output; task result, recap, and postcondition |
 | Manual play works; CI fails | runner tag/protection, service-account PATH/home/key, protected variable |
 | Elasticsearch exits early | `vm.max_map_count`, data ownership, container logs |
 | Kafka client connects then fails | advertised listener and container alias resolution |
@@ -25,13 +26,34 @@ topics, parsing, indexing, aliases, or data views.
 ```bash
 getent ahostsv4 mini-manticore.local
 ssh -vv ansible@mini-manticore.local true
-ansible-inventory --host mini-manticore.local
+ansible-inventory --graph
+ansible mini_manticore_hosts -m ansible.builtin.debug \
+  -a var=ansible_connection
+ansible mini_manticore_hosts -m ansible.builtin.debug \
+  -a var=ansible_user
+ansible mini_manticore_hosts -m ansible.builtin.debug \
+  -a var=ansible_port
 ansible mini_manticore_hosts -m ping -vv
 ```
+
+Do not use `ansible-inventory --host`, `ansible-inventory --list`, or
+`ansible-inventory --graph --vars` after secret variables exist. Those forms
+can print decrypted host variables, including the become credential. Use plain
+`--graph` for membership and request only known non-secret values when
+diagnosing connection settings.
 
 Do not fix a host-key error with `host_key_checking=False`. Verify the current
 host fingerprint, then deliberately repair the initiating account's
 `known_hosts` entry if the key legitimately changed.
+
+On Fedora, a successful become operation can cause PAM or systemd to append an
+OSC 3008 terminal-context marker. Ansible may describe that trailing marker as
+junk after the module's JSON data. It is benign only when the affected task
+reports success, the play recap reports `failed=0`, and a direct check confirms
+the intended state. Do not change sudo or PAM policy, or disable fingerprint
+authentication, solely to remove this warning. If the task failed or the
+trailing output is not the expected OSC marker, continue investigating it as a
+real module or privilege-escalation failure.
 
 ## Rendered projects and containers
 
