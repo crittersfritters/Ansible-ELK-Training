@@ -75,8 +75,18 @@ The Linux distribution, package manager, and host-package versions are not
 course contracts. Use current distribution and vendor guidance to provide the
 required capabilities, then prove each capability directly.
 
-Obtain this repository from the maintainer's Git account by cloning it or by
-copying an archive. Then:
+Obtain the learner branch from the public
+[GitHub mirror](https://github.com/crittersfritters/ansible-elastic-stack-training).
+Clone only `training` so the reference implementation is not fetched into the
+learner workspace:
+
+```bash
+git clone --branch training --single-branch \
+  https://github.com/crittersfritters/ansible-elastic-stack-training.git
+cd ansible-elastic-stack-training
+```
+
+A training-branch archive from the same mirror can be used instead. Then:
 
 1. Provide Git, Docker Engine, the Docker Compose v2 plugin, Python 3, Ansible,
    an SSH client and server, and ordinary troubleshooting tools.
