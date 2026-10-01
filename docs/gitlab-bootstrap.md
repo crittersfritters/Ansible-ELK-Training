@@ -178,9 +178,9 @@ from an extracted working tree. Set `training` as the default branch. You may
 work in a personal branch while keeping the imported branch unchanged.
 
 Prove both a fetch and a push from the host. An SSH clone URL must have the
-form `ssh://git@gitlab.local:2424/<namespace>/mini-manticore-training.git`; an
+form `ssh://git@gitlab.local:2424/<namespace>/ansible-elastic-stack-training.git`; an
 HTTP URL must have the form
-`http://gitlab.local:8929/<namespace>/mini-manticore-training.git`. Substitute
+`http://gitlab.local:8929/<namespace>/ansible-elastic-stack-training.git`. Substitute
 your actual namespace without changing the course ports.
 
 Clone the project back from local GitLab into a separate course working
