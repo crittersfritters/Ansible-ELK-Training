@@ -94,7 +94,7 @@ Register it with these reference properties:
 |---|---|
 | GitLab URL | `http://gitlab.local:8929` |
 | Executor | `shell` |
-| Scope | Project runner for **Mini-Manticore Training** |
+| Scope | Project runner for **Ansible Elastic Stack Training Lab** |
 | Tag | `mini-manticore-local` |
 | Run untagged jobs | Disabled when the reference jobs use the tag |
 | Protected | Enabled; the reference pipeline also rejects unprotected refs |

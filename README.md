@@ -1,4 +1,4 @@
-# Mini-Manticore Training — answer sheet
+# Ansible Elastic Stack Training Lab — answer sheet
 
 This branch is the complete reference implementation for the localhost course.
 It is one valid design, not the only valid design. The default `training`

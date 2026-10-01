@@ -1,4 +1,4 @@
-# Mini-Manticore Training interface contract
+# Ansible Elastic Stack Training Lab interface contract
 
 This is the answer implementation's source of truth. The training branch
 publishes the interoperability portions without the implementation syntax.

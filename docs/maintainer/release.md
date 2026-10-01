@@ -1,4 +1,4 @@
-# Mini-Manticore Training maintainer release guide
+# Ansible Elastic Stack Training Lab maintainer release guide
 
 Use release-candidate tags while any target-host or GitLab gate remains
 unrecorded. Do not promote the course to final `v1.0` tags until every
@@ -11,7 +11,7 @@ Maintain these as independent repositories:
 | Repository | Purpose |
 |---|---|
 | **Mini-Manticore** | Current maintained implementation used as an upstream source of selected fixes and design changes |
-| **Mini-Manticore Training** | Versioned course with a deliberately sparse learner branch and a tested reference branch |
+| **Ansible Elastic Stack Training Lab** | Versioned course with a deliberately sparse learner branch and a tested reference branch |
 
 Do not mirror or automatically merge **Mini-Manticore** into the course. A
 working-site change is not automatically appropriate for a localhost teaching
@@ -19,7 +19,7 @@ environment, and a wholesale merge can expose solutions in the learner branch.
 
 ## Canonical branches
 
-**Mini-Manticore Training** has two canonical branches:
+**Ansible Elastic Stack Training Lab** has two canonical branches:
 
 | Branch | Role |
 |---|---|
