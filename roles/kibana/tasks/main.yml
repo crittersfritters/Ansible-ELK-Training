@@ -56,7 +56,7 @@
     url: "http://127.0.0.1:5601/api/data_views/data_view/{{ item.data_view }}"
     method: GET
     headers:
-      kbn-xsrf: mini-manticore-training
+      kbn-xsrf: ansible-elastic-stack-training
     return_content: true
     status_code:
       - 200
@@ -72,7 +72,7 @@
     url: http://127.0.0.1:5601/api/data_views/data_view
     method: POST
     headers:
-      kbn-xsrf: mini-manticore-training
+      kbn-xsrf: ansible-elastic-stack-training
     body_format: json
     body:
       data_view:

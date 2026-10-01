@@ -144,7 +144,7 @@ default:
 
 .manticore_deploy_job:
   interruptible: false
-  resource_group: mini-manticore-training
+  resource_group: ansible-elastic-stack-training
   cache:
     key:
       files:

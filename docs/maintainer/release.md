@@ -258,13 +258,13 @@ bundle:
 ```bash
 git switch training
 git status --short
-git bundle create Mini-Manticore-Training-course-v1.0-rc1.bundle \
+git bundle create Ansible-Elastic-Stack-Training-course-v1.0-rc1.bundle \
   HEAD refs/heads/training refs/heads/answer-sheet \
   refs/tags/course-v1.0-rc1-training \
   refs/tags/course-v1.0-rc1-answer \
   refs/tags/course-v1.0-rc1-answer-manual \
   refs/tags/course-v1.0-rc1-answer-ansible
-git bundle verify Mini-Manticore-Training-course-v1.0-rc1.bundle
+git bundle verify Ansible-Elastic-Stack-Training-course-v1.0-rc1.bundle
 ```
 
 Verify the advertised refs include `training`, `answer-sheet`, and all release
@@ -292,12 +292,12 @@ names:
 ```bash
 git archive \
   --format=zip \
-  --output=Mini-Manticore-Training-course-v1.0-rc1-training.zip \
+  --output=Ansible-Elastic-Stack-Training-course-v1.0-rc1-training.zip \
   course-v1.0-rc1-training
 
 git archive \
   --format=zip \
-  --output=Mini-Manticore-Training-course-v1.0-rc1-answer.zip \
+  --output=Ansible-Elastic-Stack-Training-course-v1.0-rc1-answer.zip \
   course-v1.0-rc1-answer
 ```
 
@@ -309,10 +309,10 @@ Generate a checksum file after the bundle and both ZIPs are final:
 
 ```bash
 sha256sum \
-  Mini-Manticore-Training-course-v1.0-rc1.bundle \
-  Mini-Manticore-Training-course-v1.0-rc1-training.zip \
-  Mini-Manticore-Training-course-v1.0-rc1-answer.zip \
-  > Mini-Manticore-Training-course-v1.0-rc1.sha256
+  Ansible-Elastic-Stack-Training-course-v1.0-rc1.bundle \
+  Ansible-Elastic-Stack-Training-course-v1.0-rc1-training.zip \
+  Ansible-Elastic-Stack-Training-course-v1.0-rc1-answer.zip \
+  > Ansible-Elastic-Stack-Training-course-v1.0-rc1.sha256
 ```
 
 Checksums prove that a downloaded artifact matches the released bytes; they do
