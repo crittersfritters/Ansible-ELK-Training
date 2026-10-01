@@ -164,7 +164,7 @@ Keep credentials outside tracked files.
 
 ## Create the local training project
 
-Create a blank project named **Mini-Manticore Training**. Avoid initializing it
+Create a blank project named **Ansible Elastic Stack Training Lab**. Avoid initializing it
 with a second README if the imported repository already has commits.
 
 Transfer the course repository into the project by either:
@@ -208,7 +208,7 @@ This milestone is complete only when all of the following are true:
 - the web and Git SSH ports do not displace host SSH or a Mini-Manticore port;
 - `/var/training/gitlab/config`, `/var/training/gitlab/logs`, and
   `/var/training/gitlab/data` remain after container recreation;
-- the **Mini-Manticore Training** project preserves the imported history;
+- the **Ansible Elastic Stack Training Lab** project preserves the imported history;
 - the learner can fetch and push through the chosen Git transport;
 - a fresh clone from local GitLab checks out `training` and retains history;
 - stopping or recreating GitLab does not stop or delete an unrelated test

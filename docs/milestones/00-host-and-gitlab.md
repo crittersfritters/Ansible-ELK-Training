@@ -39,7 +39,7 @@ procedure. The checklist below is the milestone summary.
 8. Start GitLab, follow its startup state, obtain the initial administrator
    credential through the documented image procedure, and sign in.
 9. Recreate the GitLab container and prove that the project and account remain.
-10. Create a blank **Mini-Manticore Training** project, push the supplied
+10. Create a blank **Ansible Elastic Stack Training Lab** project, push the supplied
     branches, make `training` the default, and clone it back from local GitLab.
 
 Do not place Mini-Manticore services in this Compose project. Do not make the

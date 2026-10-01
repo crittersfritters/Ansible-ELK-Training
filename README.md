@@ -1,6 +1,6 @@
-# Mini-Manticore Training
+# Ansible Elastic Stack Training Lab
 
-Mini-Manticore Training is a self-paced construction lab. You will build a
+Ansible Elastic Stack Training Lab is a self-paced construction lab. You will build a
 localhost data path with Docker Compose, Zeek, Suricata, Filebeat, Kafka,
 Logstash, Elasticsearch, Kibana, Ansible, and GitLab CI.
 
@@ -85,7 +85,7 @@ copying an archive. Then:
 3. Configure a local hostname for GitLab and confirm it resolves to the local
    host.
 4. Complete the GitLab bootstrap milestone.
-5. Create a blank **Mini-Manticore Training** project in your local GitLab.
+5. Create a blank **Ansible Elastic Stack Training Lab** project in your local GitLab.
 6. Add the local project as a Git remote and push the `training` branch. If the
    reference branch was supplied to you, push `answer-sheet` separately and
    leave `training` as the default branch.
